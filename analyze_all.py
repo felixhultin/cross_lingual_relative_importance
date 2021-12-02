@@ -101,6 +101,7 @@ def compare_importance(et_tokens, human_salience, lm_tokens, lm_salience, import
 
 corpora_modelpaths = {
     'geco': ['bert-base-uncased', 'distilbert-base-uncased', 'albert-base-v2'],
+    'geco_nl': ['GroNLP/bert-base-dutch-cased', 'bert-base-multilingual-cased'],
     'zuco': ['bert-base-uncased', 'distilbert-base-uncased', 'albert-base-v2'],
     'potsdam': [
         'dbmdz/bert-base-german-uncased',
