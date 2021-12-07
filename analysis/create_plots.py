@@ -6,10 +6,20 @@ import pandas as pd
 import seaborn as sns
 from wordfreq import word_frequency
 import spacy.tokens
+from spacy.pipeline import Tagger
 
 
-def process_tokens(all_tokens):
-    nlp = spacy.load('en_core_web_md')
+def process_tokens(all_tokens, lang):
+    if lang == 'en':
+        nlp = spacy.load('en_core_web_md')
+    elif lang == 'de':
+        nlp = spacy.load('de_core_news_sm')
+    elif lang == 'nl':
+        nlp = spacy.load('nl_core_news_sm')
+    elif lang == 'ru':
+        nlp = spacy.load('ru_core_news_sm')
+    else:
+        raise ValueError("Language '" + lang  +"' is not available.")
 
     pos_tags = []
     frequencies = []
@@ -20,7 +30,7 @@ def process_tokens(all_tokens):
         # run the pos tagger
         processed = nlp.tagger(doc)
         sentence_tags = [token.pos_ for token in processed]
-        sentence_frequencies = [word_frequency(token.lemma_, 'en', wordlist='best', minimum=0.0) for token in processed]
+        sentence_frequencies = [word_frequency(token.lemma_, lang, wordlist='best', minimum=0.0) for token in processed]
         pos_tags.append(sentence_tags)
         frequencies.append(sentence_frequencies)
 
