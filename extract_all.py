@@ -39,9 +39,22 @@ def extract_all_human_importance(corpus):
 
 
 corpora_modelpaths = {
-    'geco': ['bert-base-uncased', 'distilbert-base-uncased', 'albert-base-v2', 'bert-base-multilingual-cased'],
-    'geco_nl': ['GroNLP/bert-base-dutch-cased', 'bert-base-multilingual-cased'],
-    'zuco': ['bert-base-uncased', 'distilbert-base-uncased', 'albert-base-v2', 'bert-base-multilingual-cased'],
+    'geco': [
+        'bert-base-uncased',
+        'distilbert-base-uncased',
+        'albert-base-v2',
+        'bert-base-multilingual-cased'
+    ],
+    'geco_nl': [
+        'GroNLP/bert-base-dutch-cased',
+        'bert-base-multilingual-cased'
+    ],
+    'zuco':
+        ['bert-base-uncased',
+        'distilbert-base-uncased',
+        'albert-base-v2',
+        'bert-base-multilingual-cased'
+    ],
     'potsdam': [
         'dbmdz/bert-base-german-uncased',
         'distilbert-base-german-cased',

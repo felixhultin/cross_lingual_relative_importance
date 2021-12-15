@@ -108,7 +108,6 @@ corpora_modelpaths = {
     ],
     'geco_nl': [
         'GroNLP/bert-base-dutch-cased',
-        'bert-base-multilingual-cased',
         'bert-base-multilingual-cased'
     ],
     'zuco':
@@ -151,6 +150,21 @@ for corpus, modelpaths in corpora_modelpaths.items():
     for importance_type in types:
         print(importance_type)
 
+        # Human baselines
+        et_tokens, human_importance = extract_human_importance(corpus)
+        pos_tags, frequencies = process_tokens(et_tokens, lang)
+        len_mean, len_std = calculate_len_baseline(et_tokens, human_importance)
+        freq_mean, freq_std = calculate_freq_baseline(frequencies, human_importance)
+        row = {
+            'corpus': corpus,
+            'modelname': 'human',
+            'length_mean_correlation': len_mean,
+            'length_std_correlation': len_std,
+            'freq_mean_correlation': freq_mean,
+            'freq_std_correlation': freq_std
+        }
+        baseline_results = baseline_results.append(row, ignore_index=True)
+
         for mp in modelpaths:
             modelname = mp.split("/")[-1]
             lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
@@ -165,11 +179,8 @@ for corpus, modelpaths in corpora_modelpaths.items():
                 {'importance_type': importance_type, 'corpus': corpus, 'model': mp, 'mean_correlation': spearman_mean, 'std_correlation': spearman_std},
                 ignore_index=True)
 
-            # Other baselines and plots
-
-            et_tokens, human_importance = extract_human_importance(corpus)
+            # Plots
             lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
-
 
             # Plot length vs saliency
             flat_et_tokens = flatten(et_tokens)
@@ -185,7 +196,6 @@ for corpus, modelpaths in corpora_modelpaths.items():
             # Linguistic pre-processing (POS-tagging, word frequency extraction)
             #lm_tokens and et_tokens differ slightly because there are some cases which cannot be perfectly aligned.
             lm_pos_tags, lm_frequencies = process_tokens(lm_tokens, lang)
-            pos_tags, frequencies = process_tokens(et_tokens, lang)
 
             # Plot POS distribution with respect to saliency
             tag2machineimportance = calculate_saliency_by_wordclass(lm_pos_tags, lm_importance)
@@ -201,15 +211,12 @@ for corpus, modelpaths in corpora_modelpaths.items():
             visualize_frequencies(flat_frequencies, flat_human_importance, flat_lm_frequencies,
                                       flat_lm_importance, "plots/" + corpus + "_" + modelname + "_frequency.png")
 
-
-
-
-            #Length Baseline
-            len_mean, len_std = calculate_len_baseline(et_tokens, human_importance)
-            freq_mean, freq_std = calculate_freq_baseline(frequencies, human_importance)
+            # LM baselines
+            len_mean, len_std = calculate_len_baseline(et_tokens, lm_importance)
+            freq_mean, freq_std = calculate_freq_baseline(frequencies, lm_importance)
             row = {
                 'corpus': corpus,
-                'model': modelname,
+                'modelname': modelname,
                 'length_mean_correlation': len_mean,
                 'length_std_correlation': len_std,
                 'freq_mean_correlation': freq_mean,
