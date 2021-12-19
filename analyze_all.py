@@ -157,7 +157,7 @@ for corpus, modelpaths in corpora_modelpaths.items():
         freq_mean, freq_std = calculate_freq_baseline(frequencies, human_importance)
         row = {
             'corpus': corpus,
-            'modelname': 'human',
+            'model': 'human',
             'length_mean_correlation': len_mean,
             'length_std_correlation': len_std,
             'freq_mean_correlation': freq_mean,
@@ -212,11 +212,11 @@ for corpus, modelpaths in corpora_modelpaths.items():
                                       flat_lm_importance, "plots/" + corpus + "_" + modelname + "_frequency.png")
 
             # LM baselines
-            len_mean, len_std = calculate_len_baseline(et_tokens, lm_importance)
-            freq_mean, freq_std = calculate_freq_baseline(frequencies, lm_importance)
+            len_mean, len_std = calculate_len_baseline(lm_tokens, lm_importance)
+            freq_mean, freq_std = calculate_freq_baseline(lm_frequencies, lm_importance)
             row = {
                 'corpus': corpus,
-                'modelname': modelname,
+                'model': modelname,
                 'length_mean_correlation': len_mean,
                 'length_std_correlation': len_std,
                 'freq_mean_correlation': freq_mean,
