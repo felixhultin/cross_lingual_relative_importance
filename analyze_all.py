@@ -4,7 +4,7 @@ import scipy.stats
 import sklearn.metrics
 from ast import literal_eval
 from analysis.create_plots import *
-from analysis.calculate_baselines import calculate_freq_baseline, calculate_len_baseline, calculate_permutation_baseline
+from analysis.calculate_baselines import calculate_freq_baseline, calculate_len_baseline, calculate_wordclass_baseline, calculate_permutation_baseline
 from extract_model_importance.tokenization_util import merge_symbols, merge_albert_tokens, merge_hyphens
 
 def extract_human_importance(dataset):
@@ -35,8 +35,12 @@ def extract_model_importance(dataset, model, importance_type):
     with open(fname, "r") as f:
         for line in f.read().splitlines():
             tokens, heat = line.split("\t")
-
-            tokens = list(literal_eval(tokens))
+            try:
+                tokens = list(literal_eval(tokens))
+            except:
+                lm_tokens.append([])
+                lm_salience.append(np.array([]))
+                continue
             salience = np.array(literal_eval(heat))
 
             # remove CLR and SEP tokens, this is an experimental choice
@@ -46,11 +50,15 @@ def extract_model_importance(dataset, model, importance_type):
             # Apply softmax over remaining tokens to get relative importance
             salience = scipy.special.softmax(salience)
             lm_salience.append(salience)
-
     return lm_tokens, lm_salience
 
 
-def compare_importance(et_tokens, human_salience, lm_tokens, lm_salience, importance_type):
+def compare_importance(
+    et_tokens, human_salience,
+    lm_tokens, lm_salience,
+    importance_type,
+    normalize_by_length=False
+):
     count_tok_errors = 0
 
     spearman_correlations = []
@@ -69,6 +77,12 @@ def compare_importance(et_tokens, human_salience, lm_tokens, lm_salience, import
 
 
             if len(et_tokens[i]) == len(lm_tokens[i]) == len(human_salience[i]) == len(lm_salience[i]):
+                if normalize_by_length:
+                    for lt, ht, hs, ls in zip(lm_tokens, et_tokens, human_salience, lm_salience):
+                        n_chars = sum(len(t) for t in lt)
+                        ls = [ s / ( len(t) / n_chars ) for t, s in zip(lt, ls)]
+                        n_chars = sum(len(t) for t in ht)
+                        hs = [ s / ( len(t) / n_chars ) for t, s in zip(ht, hs)]
                 # Calculate the correlation
                 spearman = scipy.stats.spearmanr(lm_salience[i], human_salience[i])[0]
                 spearman_correlations.append(spearman)
@@ -132,51 +146,66 @@ corpora_languages = {'geco': 'en',
 
 types = ["saliency", "attention"]
 
-
-baseline_columns = ('corpus', 'model', 'length_mean_correlation',
-                    'length_std_correlation', 'freq_mean_correlation')
-results_columns = ('importance_type', 'corpus', 'model', 'mean_correlation',
-                   'std_correlation')
+baseline_columns = ('corpus', 'model', 'importance_type', 'length_mean_corr',
+                    'length_std_corr', 'freq_mean_corr', 'pos_mean_corr',
+                    'pos_std_corr')
+results_columns = ('importance_type', 'corpus', 'model', 'mean_corr',
+                   'std_corr', 'mean_corr_normd_by_length',
+                   'std_corr_normd_by_length')
 baseline_results = pd.DataFrame(columns=baseline_columns)
 results = pd.DataFrame(columns=results_columns)
 permutation_results = pd.DataFrame(
-    columns=('importance_type', 'corpus', 'model', 'mean_correlation', 'std_correlation'))
+    columns=('importance_type', 'corpus', 'model', 'mean_corr', 'std_corr'))
 
 for corpus, modelpaths in corpora_modelpaths.items():
     print(corpus)
+
     et_tokens, human_importance = extract_human_importance(corpus)
     lang = corpora_languages[corpus]
+    # Human baselines
+    et_tokens, human_importance = extract_human_importance(corpus)
+    pos_tags, frequencies = process_tokens(et_tokens, lang)
+    len_mean, len_std = calculate_len_baseline(et_tokens, human_importance)
+    freq_mean, freq_std = calculate_freq_baseline(frequencies, human_importance)
+    wc_mean, wc_std = calculate_wordclass_baseline(pos_tags, human_importance)
+    row = {
+        'corpus': corpus,
+        'model': 'human',
+        'importance_type': '-',
+        'length_mean_corr': len_mean,
+        'length_std_corr': len_std,
+        'freq_mean_corr': freq_mean,
+        'freq_std_corr': freq_std,
+        'pos_mean_corr': wc_mean,
+        'pos_std_corr': wc_std,
+    }
+    baseline_results = baseline_results.append(row, ignore_index=True)
 
     for importance_type in types:
         print(importance_type)
-
-        # Human baselines
-        et_tokens, human_importance = extract_human_importance(corpus)
-        pos_tags, frequencies = process_tokens(et_tokens, lang)
-        len_mean, len_std = calculate_len_baseline(et_tokens, human_importance)
-        freq_mean, freq_std = calculate_freq_baseline(frequencies, human_importance)
-        row = {
-            'corpus': corpus,
-            'model': 'human',
-            'length_mean_correlation': len_mean,
-            'length_std_correlation': len_std,
-            'freq_mean_correlation': freq_mean,
-            'freq_std_correlation': freq_std
-        }
-        baseline_results = baseline_results.append(row, ignore_index=True)
-
         for mp in modelpaths:
             modelname = mp.split("/")[-1]
             lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
 
             # Model Correlation
             spearman_mean, spearman_std = compare_importance(et_tokens, human_importance, lm_tokens, lm_importance, importance_type)
-            results = results.append( {'importance_type': importance_type, 'corpus': corpus, 'model': modelname, 'mean_correlation': spearman_mean, 'std_correlation': spearman_std}, ignore_index=True)
+            # Normalized by length
+            spearman_mean_normd_by_length, spearman_std_normd_by_length = compare_importance(et_tokens, human_importance, lm_tokens, lm_importance, importance_type, normalize_by_length=True)
+            results = results.append({
+                'importance_type': importance_type,
+                'corpus': corpus,
+                'model': modelname,
+                'mean_corr': spearman_mean,
+                'std_corr': spearman_std,
+                'mean_corr_normd_by_length': spearman_mean_normd_by_length,
+                'std_corr_normd_by_length': spearman_std_normd_by_length
+                },
+            ignore_index=True)
 
             #Permutation Baseline
             spearman_mean, spearman_std = calculate_permutation_baseline(human_importance, lm_importance)
             permutation_results = permutation_results.append(
-                {'importance_type': importance_type, 'corpus': corpus, 'model': mp, 'mean_correlation': spearman_mean, 'std_correlation': spearman_std},
+                {'importance_type': importance_type, 'corpus': corpus, 'model': mp, 'mean_corr': spearman_mean, 'std_corr': spearman_std},
                 ignore_index=True)
 
             # Plots
@@ -214,19 +243,29 @@ for corpus, modelpaths in corpora_modelpaths.items():
             # LM baselines
             len_mean, len_std = calculate_len_baseline(lm_tokens, lm_importance)
             freq_mean, freq_std = calculate_freq_baseline(lm_frequencies, lm_importance)
+            wc_mean, wc_std = calculate_wordclass_baseline(lm_pos_tags, lm_importance)
             row = {
                 'corpus': corpus,
                 'model': modelname,
-                'length_mean_correlation': len_mean,
-                'length_std_correlation': len_std,
-                'freq_mean_correlation': freq_mean,
-                'freq_std_correlation': freq_std
+                'importance_type': importance_type,
+                'length_mean_corr': len_mean,
+                'length_std_corr': len_std,
+                'freq_mean_corr': freq_mean,
+                'freq_std_corr': freq_std,
+                'pos_mean_corr': wc_mean,
+                'pos_std_corr': wc_std
             }
             baseline_results = baseline_results.append(row, ignore_index=True)
 
 
-    # Store results
     timestr = time.strftime("%Y-%m-%d-%H:%M:%S")
+    # Store results to excel
+    with pd.ExcelWriter("results/all_results-" + timestr + ".xlsx") as writer:
+        results.to_excel(writer, sheet_name='Model Importance')
+        permutation_results.to_excel(writer, sheet_name='Permutation Baselines')
+        baseline_results.to_excel(writer, sheet_name='Corpus statistical baselines')
+
+    # Store results to latex
     with open("results/all_results-" + timestr + ".txt", "w") as outfile:
         outfile.write("Model Importance: \n")
         outfile.write(results.to_latex())
