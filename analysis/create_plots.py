@@ -4,23 +4,32 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 import pandas as pd
 import seaborn as sns
+import spacy
 from wordfreq import word_frequency
-import spacy.tokens
+from spacy.tokens import Doc
+from spacy.pipeline import Tagger
 
 
-def process_tokens(all_tokens):
-    nlp = spacy.load('en_core_web_md')
+def process_tokens(all_tokens, lang):
+    if lang == 'en':
+            nlp = spacy.load('en_core_web_md')
+    elif lang == 'de':
+        nlp = spacy.load('de_core_news_sm')
+    elif lang == 'nl':
+        nlp = spacy.load('nl_core_news_sm')
+    elif lang == 'ru':
+        nlp = spacy.load('ru_core_news_sm')
+    else:
+        raise ValueError("Language '" + lang  +"' is not available.")
 
     pos_tags = []
     frequencies = []
 
     for tokens in all_tokens:
-        doc = spacy.tokens.doc.Doc(
-            nlp.vocab, words=tokens)
-        # run the pos tagger
-        processed = nlp.tagger(doc)
+        doc = Doc(nlp.vocab, words=tokens)
+        processed = nlp(doc)
         sentence_tags = [token.pos_ for token in processed]
-        sentence_frequencies = [word_frequency(token.lemma_, 'en', wordlist='best', minimum=0.0) for token in processed]
+        sentence_frequencies = [word_frequency(token.lemma_, lang, wordlist='best', minimum=0.0) for token in processed]
         pos_tags.append(sentence_tags)
         frequencies.append(sentence_frequencies)
 
@@ -161,6 +170,7 @@ def visualize_sentence(i, et_tokens, human_saliency, lm_saliency, outfile):
             tokens = et_tokens[i]
         else:
             print("Mismatched tokenisation for sentence", i)
+            return
 
     human_data = pd.DataFrame({"Tokens": tokens, "Importance": human_saliency[i]})
     model_data = pd.DataFrame({"Tokens": tokens, "Importance": lm_saliency[i]})

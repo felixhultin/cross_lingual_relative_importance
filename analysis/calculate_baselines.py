@@ -3,7 +3,6 @@ import numpy as np
 import scipy.stats
 import random
 
-
 # Here we calculate length, frequency, and permutation baselines on the sentence level
 # Note that the correlation functions yield a warning if one of the list is constant (stdev = 0)
 # For example, the phrase "you did not" would yield the length vector [3,3,3]
@@ -56,6 +55,31 @@ def calculate_freq_baseline(frequencies, importance):
     print("---------------")
     print()
     return spearman_mean, spearman_std
+
+def calculate_wordclass_baseline(wordclasses, importance):
+    ttest = []
+    kendall = []
+    mi_scores = []
+
+    for i in range(len(wordclasses)):
+        if len(wordclasses[i])>0:
+            mi_scores.append(sklearn.metrics.mutual_info_score(wordclasses[i], importance[i]))
+            le = sklearn.preprocessing.LabelEncoder()
+            le.fit(wordclasses[i])
+            encoded = le.transform(wordclasses[i])
+            ttest.append(scipy.stats.ttest_ind(encoded, importance[i])[0])
+            kendall.append(scipy.stats.kendalltau(wordclasses[i], importance[i])[0])
+    ttest_mean = np.nanmean(np.asarray(ttest))
+    ttest_std = np.nanstd(np.asarray(ttest))
+    print("---------------")
+    print("Wordclass Baseline")
+    print("T-test Correlation: Mean: {:0.2f}, Stdev: {:0.2f}".format(ttest_mean,
+                                                                       ttest_std))
+    # print("Kendall Tau: Mean: {:0.2f}, Stdev: {:0.2f}".format( np.nanmean(np.asarray(kendall)), np.nanstd(np.asarray(kendall))))
+    # print("Mutual Information: Mean: {:0.2f}, Stdev: {:0.2f}".format( np.nanmean(np.asarray(mi_scores)), np.nanstd(np.asarray(mi_scores))))
+    print("---------------")
+    print()
+    return ttest_mean, ttest_std
 
 
 def calculate_permutation_baseline(human_importance, model_importance, num_permutations=100, seed=35):

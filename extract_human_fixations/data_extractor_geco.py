@@ -42,7 +42,7 @@ def read_geco_file(reading_data_df, sentence_info_df, task):
                 print(sent_data)
             i += 1
         # write CSV files for each subject
-        df_subj.to_csv("data/"+task+"/"+subj+"-relfix-feats.csv")
+        df_subj.to_csv("data/"+task+"/relfix/"+subj+"-relfix-feats.csv")
 
     print("ALL DONE.")
 
@@ -91,20 +91,20 @@ def main():
     args = parser.parse_args()
     lang = args.language
     if lang == 'en':
-        reading_data_fn = "data/geco/MonolingualReadingData.xlsx"
+        reading_data_fn = "data/geco/raw/MonolingualReadingData.xlsx"
         print("Reading file for GECO: ", reading_data_fn)
         reading_data_df = pd.read_excel(reading_data_fn, usecols="A,E,F,I,J,K,BB",
                                         na_filter=False, engine='openpyxl')
-        sentence_info_fn = "data/geco/EnglishMaterial_corrected.csv"
+        sentence_info_fn = "data/geco/raw/EnglishMaterial_corrected.csv"
         print("Reading file for GECO: ", sentence_info_fn)
         sentence_info_df = pd.read_csv(sentence_info_fn, na_filter=False)
         task =  "geco"
     elif lang == 'nl':
-        reading_data_fn = "data/geco_nl/L1ReadingData.xlsx"
+        reading_data_fn = "data/geco_nl/raw/L1ReadingData.xlsx"
         print("Reading file for GECO: ", reading_data_fn)
         reading_data_df = pd.read_excel(reading_data_fn, na_filter=False,
                                         usecols="A,E,F,I,J,K,BB", engine='openpyxl')
-        sentence_info_fn = "data/geco_nl/DutchMaterials.xlsx"
+        sentence_info_fn = "data/geco_nl/raw/DutchMaterials.xlsx"
         print("Reading file for GECO: ", sentence_info_fn)
         sentence_info_df = pd.read_excel(sentence_info_fn, na_filter=False,
                                          engine='openpyxl')
