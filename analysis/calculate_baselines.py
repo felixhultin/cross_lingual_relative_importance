@@ -83,35 +83,22 @@ def calculate_wordclass_baseline(wordclasses, importance):
     print()
     return ttest_mean, ttest_std
 
-def calculate_linear_regression(independent, *dependent):
-    c = 0
-    print(len(independent), len(dependent[0]), len(dependent[1]))
-    new_independent = []
-    new_dependent = [[] for d in dependent]
-    for idx, l in enumerate(independent):
-        if any(len(l) != len(d[idx]) for d in dependent):
-            continue
-        new_independent.append(l)
-        for d_idx, d in enumerate(new_dependent):
-            try:
-                print(dependent[d_idx])
-            except:
-                import pdb
-                pdb.set_trace()
-            new_dependent[d_idx].append(dependent[d_idx][idx])
-    independent, dependent = new_independent, new_dependent
+def calculate_linear_regression(dependent, *independent):
+    new_dependent = []
+    new_independent = [[] for ind in independent]
     for idx, l in enumerate(dependent):
-        dependent[idx] = [item for sublist in l for item in sublist]
-    X = np.array(dependent).swapaxes(0,1)
-    y = np.array([item for sublist in independent for item in sublist])
-    #import pdb
-    #pdb.set_trace()
-    #Y = [[] for y in dependent]
-
+        if any(len(l) != len(ind[idx]) for ind in independent):
+            continue
+        new_dependent.append(l)
+        for ind_idx, ind in enumerate(new_independent):
+            new_independent[ind_idx].append(independent[ind_idx][idx])
+    dependent, independent = new_dependent, new_independent
+    for idx, l in enumerate(independent):
+        independent[idx] = [item for sublist in l for item in sublist]
+    X = np.array(independent).swapaxes(0,1)
+    y = np.array([item for sublist in dependent for item in sublist])
     reg = LinearRegression().fit(X, y)
     r_sq = reg.score(X, y)
-    coef, intercept_ =  r_sq.coef_, r_sq.intercept_
-    print(coef, intercept_)
     return r_sq
 
 def calculate_permutation_baseline(human_importance, model_importance, num_permutations=100, seed=35):
