@@ -4,7 +4,7 @@ import scipy.stats
 import sklearn.metrics
 from ast import literal_eval
 from analysis.create_plots import *
-from analysis.calculate_baselines import calculate_freq_baseline, calculate_len_baseline, calculate_wordclass_baseline, calculate_permutation_baseline
+from analysis.calculate_baselines import calculate_freq_baseline, calculate_len_baseline, calculate_wordclass_baseline, calculate_permutation_baseline, calculate_linear_regression
 from extract_model_importance.tokenization_util import merge_symbols, merge_albert_tokens, merge_hyphens
 
 def extract_human_importance(dataset):
@@ -80,9 +80,9 @@ def compare_importance(
                 if normalize_by_length:
                     for lt, ht, hs, ls in zip(lm_tokens, et_tokens, human_salience, lm_salience):
                         n_chars = sum(len(t) for t in lt)
-                        ls = [ s / ( len(t) / n_chars ) for t, s in zip(lt, ls)]
+                        ls = [ s / len(t) for t, s in zip(lt, ls)]
                         n_chars = sum(len(t) for t in ht)
-                        hs = [ s / ( len(t) / n_chars ) for t, s in zip(ht, hs)]
+                        hs = [ s / len(t) for t, s in zip(ht, hs)]
                 # Calculate the correlation
                 spearman = scipy.stats.spearmanr(lm_salience[i], human_salience[i])[0]
                 spearman_correlations.append(spearman)
@@ -125,10 +125,10 @@ corpora_modelpaths = {
         'bert-base-multilingual-cased'
     ],
     'zuco':
-        ['bert-base-uncased',
-        'distilbert-base-uncased',
-        'albert-base-v2',
-        'bert-base-multilingual-cased'
+         ['bert-base-uncased',
+         'distilbert-base-uncased',
+         'albert-base-v2',
+         'bert-base-multilingual-cased'
     ],
     'potsdam': [
         'dbmdz/bert-base-german-uncased',
@@ -153,13 +153,13 @@ results_columns = ('importance_type', 'corpus', 'model', 'mean_corr',
                    'std_corr', 'mean_corr_normd_by_length',
                    'std_corr_normd_by_length')
 baseline_results = pd.DataFrame(columns=baseline_columns)
+regression_results = pd.DataFrame()
 results = pd.DataFrame(columns=results_columns)
 permutation_results = pd.DataFrame(
     columns=('importance_type', 'corpus', 'model', 'mean_corr', 'std_corr'))
 
 for corpus, modelpaths in corpora_modelpaths.items():
     print(corpus)
-
     et_tokens, human_importance = extract_human_importance(corpus)
     lang = corpora_languages[corpus]
     # Human baselines
@@ -244,6 +244,8 @@ for corpus, modelpaths in corpora_modelpaths.items():
             len_mean, len_std = calculate_len_baseline(lm_tokens, lm_importance)
             freq_mean, freq_std = calculate_freq_baseline(lm_frequencies, lm_importance)
             wc_mean, wc_std = calculate_wordclass_baseline(lm_pos_tags, lm_importance)
+
+            # Regression analysis
             row = {
                 'corpus': corpus,
                 'model': modelname,
@@ -257,6 +259,23 @@ for corpus, modelpaths in corpora_modelpaths.items():
             }
             baseline_results = baseline_results.append(row, ignore_index=True)
 
+            # Regression analysis
+            lm_lengths = [[len(token) for token in sent] for sent in lm_tokens]
+            row = {
+                'corpus': corpus,
+                'model': modelname,
+                'importance_type': importance_type,
+                'model~human+freq+length': calculate_linear_regression(lm_importance, human_importance, lm_frequencies, lm_lengths),
+                'model~human+freq': calculate_linear_regression(lm_importance, human_importance, lm_frequencies),
+                'model~human+length': calculate_linear_regression(lm_importance, human_importance, lm_lengths),
+                'model~freq+length': calculate_linear_regression(lm_importance, lm_frequencies, lm_lengths),
+                'model~human': calculate_linear_regression(lm_importance, human_importance),
+                'human~model+freq+length': calculate_linear_regression(human_importance, lm_importance, lm_frequencies, lm_lengths),
+                'human~model+freq': calculate_linear_regression(human_importance, lm_importance, lm_frequencies),
+                'human~model+length': calculate_linear_regression(human_importance, lm_importance, lm_lengths),
+                'human~freq+length': calculate_linear_regression(human_importance, lm_frequencies, lm_lengths)
+            }
+            regression_results = regression_results.append(row, ignore_index=True)
 
     timestr = time.strftime("%Y-%m-%d-%H:%M:%S")
     # Store results to excel
@@ -264,6 +283,7 @@ for corpus, modelpaths in corpora_modelpaths.items():
         results.to_excel(writer, sheet_name='Model Importance')
         permutation_results.to_excel(writer, sheet_name='Permutation Baselines')
         baseline_results.to_excel(writer, sheet_name='Corpus statistical baselines')
+        regression_results.to_excel(writer, sheet_name='Regression analysis')
 
     # Store results to latex
     with open("results/all_results-" + timestr + ".txt", "w") as outfile:
@@ -276,9 +296,14 @@ for corpus, modelpaths in corpora_modelpaths.items():
         outfile.write("\n\nLen-Freq Baselines: \n")
         outfile.write(baseline_results.to_latex())
 
+        outfile.write("Regression analysis: \n")
+        outfile.write(regression_results.to_latex())
+
         print(results)
         print()
         print(permutation_results)
         print()
         print(baseline_results)
+        print()
+        print(regression_results)
         print()
