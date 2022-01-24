@@ -124,11 +124,11 @@ corpora_modelpaths = {
         'GroNLP/bert-base-dutch-cased',
         'bert-base-multilingual-cased'
     ],
-    'zuco':
-         ['bert-base-uncased',
-         'distilbert-base-uncased',
-         'albert-base-v2',
-         'bert-base-multilingual-cased'
+    'zuco': [
+        'bert-base-uncased',
+        'distilbert-base-uncased',
+        'albert-base-v2',
+        'bert-base-multilingual-cased'
     ],
     'potsdam': [
         'dbmdz/bert-base-german-uncased',
@@ -165,6 +165,7 @@ for corpus, modelpaths in corpora_modelpaths.items():
     # Human baselines
     et_tokens, human_importance = extract_human_importance(corpus)
     pos_tags, frequencies = process_tokens(et_tokens, lang)
+    lengths = [[len(token) for token in sent] for sent in et_tokens]
     len_mean, len_std = calculate_len_baseline(et_tokens, human_importance)
     freq_mean, freq_std = calculate_freq_baseline(frequencies, human_importance)
     wc_mean, wc_std = calculate_wordclass_baseline(pos_tags, human_importance)
@@ -270,10 +271,11 @@ for corpus, modelpaths in corpora_modelpaths.items():
                 'model~human+length': calculate_linear_regression(lm_importance, human_importance, lm_lengths),
                 'model~freq+length': calculate_linear_regression(lm_importance, lm_frequencies, lm_lengths),
                 'model~human': calculate_linear_regression(lm_importance, human_importance),
-                'human~model+freq+length': calculate_linear_regression(human_importance, lm_importance, lm_frequencies, lm_lengths),
-                'human~model+freq': calculate_linear_regression(human_importance, lm_importance, lm_frequencies),
-                'human~model+length': calculate_linear_regression(human_importance, lm_importance, lm_lengths),
-                'human~freq+length': calculate_linear_regression(human_importance, lm_frequencies, lm_lengths)
+
+                'human~model+freq+length': calculate_linear_regression(human_importance, lm_importance, frequencies, lengths),
+                'human~model+freq': calculate_linear_regression(human_importance, lm_importance, frequencies),
+                'human~model+length': calculate_linear_regression(human_importance, lm_importance, lengths),
+                'human~freq+length': calculate_linear_regression(human_importance, frequencies, lengths)
             }
             regression_results = regression_results.append(row, ignore_index=True)
 
