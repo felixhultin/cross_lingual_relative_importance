@@ -1,3 +1,4 @@
+import argparse
 import os.path
 import time
 import scipy.stats
@@ -78,11 +79,15 @@ def compare_importance(
 
             if len(et_tokens[i]) == len(lm_tokens[i]) == len(human_salience[i]) == len(lm_salience[i]):
                 if normalize_by_length:
+                    normalized_human_salience = []
+                    normalized_lm_salience = []
                     for lt, ht, hs, ls in zip(lm_tokens, et_tokens, human_salience, lm_salience):
-                        n_chars = sum(len(t) for t in lt)
-                        ls = [ s / len(t) for t, s in zip(lt, ls)]
-                        n_chars = sum(len(t) for t in ht)
-                        hs = [ s / len(t) for t, s in zip(ht, hs)]
+                        hs = np.array([ s / len(t) for t, s in zip(ht, hs)])
+                        ls = np.array([ s / len(t) for t, s in zip(lt, ls)])
+                        normalized_human_salience.append(hs)
+                        normalized_lm_salience.append(ls)
+                    human_salience = normalized_human_salience
+                    lm_salience = normalized_lm_salience
                 # Calculate the correlation
                 spearman = scipy.stats.spearmanr(lm_salience[i], human_salience[i])[0]
                 spearman_correlations.append(spearman)
@@ -113,11 +118,15 @@ def compare_importance(
     return mean_spearman, std_spearman
 
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--skip-model-if-not-exist', action='store_true')
+
+
 corpora_modelpaths = {
     'geco': [
+        'albert-base-v2',
         'bert-base-uncased',
         'distilbert-base-uncased',
-        'albert-base-v2',
         'bert-base-multilingual-cased'
     ],
     'geco_nl': [
@@ -144,7 +153,7 @@ corpora_languages = {'geco': 'en',
                      'potsdam': 'de',
                      'russsent': 'ru'}
 
-types = ["saliency", "attention"]
+types = ["saliency", "attention", "flow"]
 
 baseline_columns = ('corpus', 'model', 'importance_type', 'length_mean_corr',
                     'length_std_corr', 'freq_mean_corr', 'pos_mean_corr',
@@ -163,7 +172,6 @@ for corpus, modelpaths in corpora_modelpaths.items():
     et_tokens, human_importance = extract_human_importance(corpus)
     lang = corpora_languages[corpus]
     # Human baselines
-    et_tokens, human_importance = extract_human_importance(corpus)
     pos_tags, frequencies = process_tokens(et_tokens, lang)
     lengths = [[len(token) for token in sent] for sent in et_tokens]
     len_mean, len_std = calculate_len_baseline(et_tokens, human_importance)
@@ -186,7 +194,16 @@ for corpus, modelpaths in corpora_modelpaths.items():
         print(importance_type)
         for mp in modelpaths:
             modelname = mp.split("/")[-1]
-            lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
+            try:
+                lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
+            except FileNotFoundError:
+                skip = parser.parse_args().skip_model_if_not_exist
+                if skip:
+                    print("Skipping ", mp, " results file does not exist")
+                    continue
+                else:
+                    raise
+
 
             # Model Correlation
             spearman_mean, spearman_std = compare_importance(et_tokens, human_importance, lm_tokens, lm_importance, importance_type)
@@ -211,7 +228,6 @@ for corpus, modelpaths in corpora_modelpaths.items():
 
             # Plots
             lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
-
             # Plot length vs saliency
             flat_et_tokens = flatten(et_tokens)
             flat_lm_tokens = flatten(lm_tokens)
