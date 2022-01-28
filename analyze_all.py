@@ -1,10 +1,11 @@
+import argparse
 import os.path
 import time
 import scipy.stats
 import sklearn.metrics
 from ast import literal_eval
 from analysis.create_plots import *
-from analysis.calculate_baselines import calculate_freq_baseline, calculate_len_baseline, calculate_wordclass_baseline, calculate_permutation_baseline
+from analysis.calculate_baselines import calculate_freq_baseline, calculate_len_baseline, calculate_wordclass_baseline, calculate_permutation_baseline, calculate_linear_regression
 from extract_model_importance.tokenization_util import merge_symbols, merge_albert_tokens, merge_hyphens
 
 def extract_human_importance(dataset):
@@ -78,11 +79,15 @@ def compare_importance(
 
             if len(et_tokens[i]) == len(lm_tokens[i]) == len(human_salience[i]) == len(lm_salience[i]):
                 if normalize_by_length:
+                    normalized_human_salience = []
+                    normalized_lm_salience = []
                     for lt, ht, hs, ls in zip(lm_tokens, et_tokens, human_salience, lm_salience):
-                        n_chars = sum(len(t) for t in lt)
-                        ls = [ s / ( len(t) / n_chars ) for t, s in zip(lt, ls)]
-                        n_chars = sum(len(t) for t in ht)
-                        hs = [ s / ( len(t) / n_chars ) for t, s in zip(ht, hs)]
+                        hs = np.array([ s / len(t) for t, s in zip(ht, hs)])
+                        ls = np.array([ s / len(t) for t, s in zip(lt, ls)])
+                        normalized_human_salience.append(hs)
+                        normalized_lm_salience.append(ls)
+                    human_salience = normalized_human_salience
+                    lm_salience = normalized_lm_salience
                 # Calculate the correlation
                 spearman = scipy.stats.spearmanr(lm_salience[i], human_salience[i])[0]
                 spearman_correlations.append(spearman)
@@ -113,19 +118,23 @@ def compare_importance(
     return mean_spearman, std_spearman
 
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--skip-model-if-not-exist', action='store_true')
+
+
 corpora_modelpaths = {
     'geco': [
+        'albert-base-v2',
         'bert-base-uncased',
         'distilbert-base-uncased',
-        'albert-base-v2',
         'bert-base-multilingual-cased'
     ],
     'geco_nl': [
         'GroNLP/bert-base-dutch-cased',
         'bert-base-multilingual-cased'
     ],
-    'zuco':
-        ['bert-base-uncased',
+    'zuco': [
+        'bert-base-uncased',
         'distilbert-base-uncased',
         'albert-base-v2',
         'bert-base-multilingual-cased'
@@ -144,7 +153,7 @@ corpora_languages = {'geco': 'en',
                      'potsdam': 'de',
                      'russsent': 'ru'}
 
-types = ["saliency", "attention"]
+types = ["saliency", "attention", "flow"]
 
 baseline_columns = ('corpus', 'model', 'importance_type', 'length_mean_corr',
                     'length_std_corr', 'freq_mean_corr', 'pos_mean_corr',
@@ -153,18 +162,18 @@ results_columns = ('importance_type', 'corpus', 'model', 'mean_corr',
                    'std_corr', 'mean_corr_normd_by_length',
                    'std_corr_normd_by_length')
 baseline_results = pd.DataFrame(columns=baseline_columns)
+regression_results = pd.DataFrame()
 results = pd.DataFrame(columns=results_columns)
 permutation_results = pd.DataFrame(
     columns=('importance_type', 'corpus', 'model', 'mean_corr', 'std_corr'))
 
 for corpus, modelpaths in corpora_modelpaths.items():
     print(corpus)
-
     et_tokens, human_importance = extract_human_importance(corpus)
     lang = corpora_languages[corpus]
     # Human baselines
-    et_tokens, human_importance = extract_human_importance(corpus)
     pos_tags, frequencies = process_tokens(et_tokens, lang)
+    lengths = [[len(token) for token in sent] for sent in et_tokens]
     len_mean, len_std = calculate_len_baseline(et_tokens, human_importance)
     freq_mean, freq_std = calculate_freq_baseline(frequencies, human_importance)
     wc_mean, wc_std = calculate_wordclass_baseline(pos_tags, human_importance)
@@ -185,7 +194,16 @@ for corpus, modelpaths in corpora_modelpaths.items():
         print(importance_type)
         for mp in modelpaths:
             modelname = mp.split("/")[-1]
-            lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
+            try:
+                lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
+            except FileNotFoundError:
+                skip = parser.parse_args().skip_model_if_not_exist
+                if skip:
+                    print("Skipping ", mp, " results file does not exist")
+                    continue
+                else:
+                    raise
+
 
             # Model Correlation
             spearman_mean, spearman_std = compare_importance(et_tokens, human_importance, lm_tokens, lm_importance, importance_type)
@@ -210,7 +228,6 @@ for corpus, modelpaths in corpora_modelpaths.items():
 
             # Plots
             lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
-
             # Plot length vs saliency
             flat_et_tokens = flatten(et_tokens)
             flat_lm_tokens = flatten(lm_tokens)
@@ -244,6 +261,8 @@ for corpus, modelpaths in corpora_modelpaths.items():
             len_mean, len_std = calculate_len_baseline(lm_tokens, lm_importance)
             freq_mean, freq_std = calculate_freq_baseline(lm_frequencies, lm_importance)
             wc_mean, wc_std = calculate_wordclass_baseline(lm_pos_tags, lm_importance)
+
+            # Regression analysis
             row = {
                 'corpus': corpus,
                 'model': modelname,
@@ -257,6 +276,24 @@ for corpus, modelpaths in corpora_modelpaths.items():
             }
             baseline_results = baseline_results.append(row, ignore_index=True)
 
+            # Regression analysis
+            lm_lengths = [[len(token) for token in sent] for sent in lm_tokens]
+            row = {
+                'corpus': corpus,
+                'model': modelname,
+                'importance_type': importance_type,
+                'model~human+freq+length': calculate_linear_regression(lm_importance, human_importance, lm_frequencies, lm_lengths),
+                'model~human+freq': calculate_linear_regression(lm_importance, human_importance, lm_frequencies),
+                'model~human+length': calculate_linear_regression(lm_importance, human_importance, lm_lengths),
+                'model~freq+length': calculate_linear_regression(lm_importance, lm_frequencies, lm_lengths),
+                'model~human': calculate_linear_regression(lm_importance, human_importance),
+
+                'human~model+freq+length': calculate_linear_regression(human_importance, lm_importance, frequencies, lengths),
+                'human~model+freq': calculate_linear_regression(human_importance, lm_importance, frequencies),
+                'human~model+length': calculate_linear_regression(human_importance, lm_importance, lengths),
+                'human~freq+length': calculate_linear_regression(human_importance, frequencies, lengths)
+            }
+            regression_results = regression_results.append(row, ignore_index=True)
 
     timestr = time.strftime("%Y-%m-%d-%H:%M:%S")
     # Store results to excel
@@ -264,6 +301,7 @@ for corpus, modelpaths in corpora_modelpaths.items():
         results.to_excel(writer, sheet_name='Model Importance')
         permutation_results.to_excel(writer, sheet_name='Permutation Baselines')
         baseline_results.to_excel(writer, sheet_name='Corpus statistical baselines')
+        regression_results.to_excel(writer, sheet_name='Regression analysis')
 
     # Store results to latex
     with open("results/all_results-" + timestr + ".txt", "w") as outfile:
@@ -276,9 +314,14 @@ for corpus, modelpaths in corpora_modelpaths.items():
         outfile.write("\n\nLen-Freq Baselines: \n")
         outfile.write(baseline_results.to_latex())
 
+        outfile.write("Regression analysis: \n")
+        outfile.write(regression_results.to_latex())
+
         print(results)
         print()
         print(permutation_results)
         print()
         print(baseline_results)
+        print()
+        print(regression_results)
         print()

@@ -3,6 +3,8 @@ import numpy as np
 import scipy.stats
 import random
 
+from sklearn.linear_model import LinearRegression
+
 # Here we calculate length, frequency, and permutation baselines on the sentence level
 # Note that the correlation functions yield a warning if one of the list is constant (stdev = 0)
 # For example, the phrase "you did not" would yield the length vector [3,3,3]
@@ -81,6 +83,23 @@ def calculate_wordclass_baseline(wordclasses, importance):
     print()
     return ttest_mean, ttest_std
 
+def calculate_linear_regression(dependent, *independent):
+    new_dependent = []
+    new_independent = [[] for ind in independent]
+    for idx, l in enumerate(dependent):
+        if any(len(l) != len(ind[idx]) for ind in independent):
+            continue
+        new_dependent.append(l)
+        for ind_idx, ind in enumerate(new_independent):
+            new_independent[ind_idx].append(independent[ind_idx][idx])
+    dependent, independent = new_dependent, new_independent
+    for idx, l in enumerate(independent):
+        independent[idx] = [item for sublist in l for item in sublist]
+    X = np.array(independent).swapaxes(0,1)
+    y = np.array([item for sublist in dependent for item in sublist])
+    reg = LinearRegression().fit(X, y)
+    r_sq = reg.score(X, y)
+    return r_sq
 
 def calculate_permutation_baseline(human_importance, model_importance, num_permutations=100, seed=35):
     all_random_correlations = []
