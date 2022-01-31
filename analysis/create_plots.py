@@ -1,3 +1,5 @@
+import itertools
+import sys
 import numpy as np
 import scipy.stats
 import matplotlib.pyplot as plt
@@ -222,3 +224,121 @@ def flatten_saliency(mylist):
         normalized_salience = [s / len(salience) for s in salience]
         flattened_salience.extend(normalized_salience)
     return flattened_salience
+
+
+def plot_correlation_heatmap(correlations, column_labels, row_labels, corpus):
+    corpus_keys = {
+        "geco": "Geco (English)",
+        "geco_nl": "Geco (Dutch)",
+        "zuco": "Zuco (English)",
+        "potsdam": "Potsdam (German)",
+        "russsent": "Russent (Russian)"
+    }
+
+    title = corpus_keys[corpus]
+
+
+    for idx, l in enumerate(row_labels):
+        mp = l
+        if 'multilingual' in mp:
+            short_name = 'mBert'
+        elif mp.startswith('bert') or mp.startswith('rubert'):
+            short_name = 'Bert'
+        elif mp.startswith('albert'):
+            short_name = 'Albert'
+        elif mp.startswith('distilbert'):
+            short_name = 'DistilBert'
+        else:
+            raise ValueError
+        row_labels[idx] = short_name
+
+    #import pdb; pdb.set_trace()
+
+    df = pd.DataFrame(correlations, columns = column_labels, index=row_labels)
+    mask = np.zeros_like(df)
+    mask[np.tril_indices_from(mask)] = True
+    cmap = sns.diverging_palette(240, 10, as_cmap=True)
+
+    # mark significant correlations
+    labels = np.zeros_like(correlations, dtype=object)
+    labels = row_labels
+
+    fig, ax = plt.subplots(figsize=(11, 9))
+    sns.set(font_scale = 1)
+    ax = sns.heatmap(df, cmap=cmap, annot=True, vmin=-1, vmax=1, fmt=".2f", annot_kws={"fontsize":8})
+    ax.xaxis.tick_top() # x axis on top
+    ax.xaxis.set_label_position('top')
+    ax.set_xticklabels(ax.get_xmajorticklabels(), fontsize = 12)
+    ax.set_yticklabels(ax.get_ymajorticklabels(), fontsize = 12)
+    plt.title(title, fontsize=24)
+    plt.savefig("plots/"+corpus+"-correlations.png")
+
+def plot_results_file(fn):
+    df = pd.read_excel(io=fn, sheet_name='Model Importance', engine='openpyxl')
+    for c in df['corpus'].unique():
+        c_df = df[df['corpus'] == c]
+        important_types = c_df['importance_type'].unique()
+        models = c_df['model'].unique()
+        correlations = []
+        for m in models:
+            m_df = c_df[c_df['model'] == m]
+            correlation_row = []
+            for t in important_types:
+                t_df = m_df[m_df['importance_type'] == t]
+                values = t_df['mean_corr'].values
+                value = values[0] if len(values) > 0 else None
+                correlation_row.append(value)
+            correlations.append(correlation_row)
+        plot_correlation_heatmap(correlations, important_types, models, c)
+
+def plot_results_file_full(fn):
+    df = pd.read_excel(io=fn, sheet_name='Model Importance', engine='openpyxl')
+    correlations = []
+    models = df['model'].unique()
+    corpora = df['corpus'].unique()
+    importance_types = df['importance_type'].unique()
+
+
+    KEYS = {'mBert':[], 'Bert':[], 'Albert': [], 'DistilBert':[]}
+    for idx, l in enumerate(models):
+        mp = l
+        if 'multilingual' in mp:
+            KEYS['mBert'].append(mp)
+        elif mp.startswith('bert') or mp.startswith('rubert'):
+            KEYS['Bert'].append(mp)
+        elif mp.startswith('albert'):
+            KEYS['Albert'].append(mp)
+        elif mp.startswith('distilbert'):
+            KEYS['DistilBert'].append(mp)
+        else:
+            raise ValueError
+
+    for m in KEYS:
+        correlation_row = []
+        for c in corpora:
+            for t in importance_types:
+                row_df = df[ (df['importance_type'] == t) & (df['corpus'] == c) & (df['model'].isin(KEYS[m]))]
+                values = row_df['mean_corr'].values
+                value = values[0] if len(values) > 0 else None
+                correlation_row.append(value)
+        correlations.append(correlation_row)
+    columns = list(itertools.product(corpora, importance_types))
+    columns = pd.MultiIndex.from_tuples([(c[0], c[1]) for c in columns], names=['corpus', 'importance_type'])
+    plot_correlation_heatmap(correlations, columns, KEYS, c)
+
+def plot_baselines(fn):
+    df = pd.read_excel(io=fn, sheet_name='Corpus statistical baselines', engine='openpyxl')
+    c_df = df[df['importance_type'] != '-']
+    c_df = c_df.pivot_table(['length_mean_corr', 'freq_mean_corr'], ['corpus', 'model',], 'importance_type')
+    human_df = df[df['importance_type'] == '-'].pivot_table(['length_mean_corr', 'freq_mean_corr'], ['corpus', 'model'], 'importance_type')
+    with pd.ExcelWriter('baseline_results.xlsx') as writer:
+        c_df.to_excel(writer, sheet_name='Model baselines')
+        human_df.to_excel(writer, sheet_name='Human baselines')
+
+    merged.to_latex('baseline_results.tex')
+
+if __name__ == '__main__':
+    filename = sys.argv[1]
+    df = pd.read_excel(io=filename, sheet_name='Model Importance', engine='openpyxl')
+    plot_baselines(filename)
+    plot_results_file(filename)
