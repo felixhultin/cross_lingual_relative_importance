@@ -62,6 +62,7 @@ def compare_importance(
 ):
     count_tok_errors = 0
 
+    pvalues = []
     spearman_correlations = []
     kendall_correlations = []
     mutual_information = []
@@ -89,13 +90,14 @@ def compare_importance(
                     human_salience = normalized_human_salience
                     lm_salience = normalized_lm_salience
                 # Calculate the correlation
-                spearman = scipy.stats.spearmanr(lm_salience[i], human_salience[i])[0]
-                spearman_correlations.append(spearman)
+                corr, pvalue = scipy.stats.spearmanr(lm_salience[i], human_salience[i])
+                spearman_correlations.append(corr)
+                pvalues.append(pvalue)
                 kendall = scipy.stats.kendalltau(lm_salience[i], human_salience[i])[0]
                 kendall_correlations.append(kendall)
                 mi_score = sklearn.metrics.mutual_info_score(lm_salience[i], human_salience[i])
                 mutual_information.append(mi_score)
-                outfile.write("{:.2f}\t{:.2f}\t{:.2f}\n".format(spearman, kendall, mi_score))
+                outfile.write("{:.2f}\t{:.2f}\t{:.2f}\n".format(corr, kendall, mi_score))
 
             else:
                 # Uncomment if you want to know more about the tokenization alignment problems
@@ -111,11 +113,13 @@ def compare_importance(
     print("Spearman Correlation Model: Mean, Stdev")
     mean_spearman = np.nanmean(np.asarray(spearman_correlations))
     std_spearman = np.nanstd(np.asarray(spearman_correlations))
+    pvalues_mean = np.nanmean(np.asarray(pvalues))
+    pvalues_std = np.nanmean(np.asarray(pvalues))
     print(mean_spearman, std_spearman)
 
     print("\n\n\n")
 
-    return mean_spearman, std_spearman
+    return mean_spearman, std_spearman, pvalues_mean, pvalues_std
 
 
 parser = argparse.ArgumentParser()
@@ -154,7 +158,6 @@ corpora_languages = {'geco': 'en',
                      'russsent': 'ru'}
 
 types = ["saliency", "attention", "flow"]
-
 baseline_columns = ('corpus', 'model', 'importance_type', 'length_mean_corr',
                     'length_std_corr', 'freq_mean_corr', 'pos_mean_corr',
                     'pos_std_corr')
@@ -174,8 +177,8 @@ for corpus, modelpaths in corpora_modelpaths.items():
     # Human baselines
     pos_tags, frequencies = process_tokens(et_tokens, lang)
     lengths = [[len(token) for token in sent] for sent in et_tokens]
-    len_mean, len_std = calculate_len_baseline(et_tokens, human_importance)
-    freq_mean, freq_std = calculate_freq_baseline(frequencies, human_importance)
+    len_mean, len_std, len_pvalues_mean, len_pvalues_std = calculate_len_baseline(et_tokens, human_importance)
+    freq_mean, freq_std, freq_pvalues_mean, freq_pvalues_std = calculate_freq_baseline(frequencies, human_importance)
     wc_mean, wc_std = calculate_wordclass_baseline(pos_tags, human_importance)
     row = {
         'corpus': corpus,
@@ -204,27 +207,37 @@ for corpus, modelpaths in corpora_modelpaths.items():
                 else:
                     raise
 
-
             # Model Correlation
-            spearman_mean, spearman_std = compare_importance(et_tokens, human_importance, lm_tokens, lm_importance, importance_type)
+            spearman_mean, spearman_std, pvalues_mean, pvalues_std = compare_importance(et_tokens, human_importance, lm_tokens, lm_importance, importance_type)
             # Normalized by length
-            spearman_mean_normd_by_length, spearman_std_normd_by_length = compare_importance(et_tokens, human_importance, lm_tokens, lm_importance, importance_type, normalize_by_length=True)
+            spearman_mean_normd_by_length, spearman_std_normd_by_length, pvalues_mean_normed, pvalues_std_normed = compare_importance(et_tokens, human_importance, lm_tokens, lm_importance, importance_type, normalize_by_length=True)
             results = results.append({
                 'importance_type': importance_type,
                 'corpus': corpus,
                 'model': modelname,
                 'mean_corr': spearman_mean,
                 'std_corr': spearman_std,
+                'pvalues_mean': pvalues_mean,
+                'pvalues_std': pvalues_std,
                 'mean_corr_normd_by_length': spearman_mean_normd_by_length,
-                'std_corr_normd_by_length': spearman_std_normd_by_length
+                'std_corr_normd_by_length': spearman_std_normd_by_length,
+                'pvalues_mean_normed': pvalues_mean_normed,
+                'pvalues_std_normed': pvalues_std_normed
                 },
             ignore_index=True)
 
             #Permutation Baseline
-            spearman_mean, spearman_std = calculate_permutation_baseline(human_importance, lm_importance)
+            spearman_mean, spearman_std, pvalues_mean, pvalues_std = calculate_permutation_baseline(human_importance, lm_importance)
             permutation_results = permutation_results.append(
-                {'importance_type': importance_type, 'corpus': corpus, 'model': mp, 'mean_corr': spearman_mean, 'std_corr': spearman_std},
-                ignore_index=True)
+                {'importance_type': importance_type,
+                'corpus': corpus,
+                'model': mp,
+                'mean_corr': spearman_mean,
+                'std_corr': spearman_std,
+                'pvalues_mean': pvalues_mean,
+                'pvalues_std': pvalues_std
+                },
+            ignore_index=True)
 
             # Plots
             lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
@@ -258,19 +271,22 @@ for corpus, modelpaths in corpora_modelpaths.items():
                                       flat_lm_importance, "plots/" + corpus + "_" + modelname + "_frequency.png")
 
             # LM baselines
-            len_mean, len_std = calculate_len_baseline(lm_tokens, lm_importance)
-            freq_mean, freq_std = calculate_freq_baseline(lm_frequencies, lm_importance)
+            len_mean, len_std, len_pvalues_mean, len_pvalues_std = calculate_len_baseline(lm_tokens, lm_importance)
+            freq_mean, freq_std, freq_pvalues_mean, freq_pvalues_std = calculate_freq_baseline(lm_frequencies, lm_importance)
             wc_mean, wc_std = calculate_wordclass_baseline(lm_pos_tags, lm_importance)
 
-            # Regression analysis
             row = {
                 'corpus': corpus,
                 'model': modelname,
                 'importance_type': importance_type,
                 'length_mean_corr': len_mean,
                 'length_std_corr': len_std,
+                'len_pvalues_mean': len_pvalues_mean,
+                'len_pvalues_std': len_pvalues_std,
                 'freq_mean_corr': freq_mean,
                 'freq_std_corr': freq_std,
+                'freq_pvalues_mean': freq_pvalues_mean,
+                'freq_pvalues_std': freq_pvalues_std,
                 'pos_mean_corr': wc_mean,
                 'pos_std_corr': wc_std
             }
@@ -286,12 +302,18 @@ for corpus, modelpaths in corpora_modelpaths.items():
                 'model~human+freq': calculate_linear_regression(lm_importance, human_importance, lm_frequencies),
                 'model~human+length': calculate_linear_regression(lm_importance, human_importance, lm_lengths),
                 'model~freq+length': calculate_linear_regression(lm_importance, lm_frequencies, lm_lengths),
-                'model~human': calculate_linear_regression(lm_importance, human_importance),
+                'model~freq': calculate_linear_regression(lm_importance, lm_frequencies),
+                'model~length': calculate_linear_regression(lm_importance, lm_lengths),
+                'model~human': calculate_linear_regression(lm_importance, human_importance, plot=True, title=corpus+"-"+modelname+"-"+importance_type),
 
                 'human~model+freq+length': calculate_linear_regression(human_importance, lm_importance, frequencies, lengths),
                 'human~model+freq': calculate_linear_regression(human_importance, lm_importance, frequencies),
                 'human~model+length': calculate_linear_regression(human_importance, lm_importance, lengths),
-                'human~freq+length': calculate_linear_regression(human_importance, frequencies, lengths)
+                'human~freq+length': calculate_linear_regression(human_importance, frequencies, lengths),
+                'human~freq': calculate_linear_regression(human_importance, frequencies),
+                'human~length': calculate_linear_regression(human_importance, lengths),
+                'human~model': calculate_linear_regression(human_importance, lm_importance) # same as model~human?
+
             }
             regression_results = regression_results.append(row, ignore_index=True)
 

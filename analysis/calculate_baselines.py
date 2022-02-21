@@ -2,6 +2,7 @@ import sklearn
 import numpy as np
 import scipy.stats
 import random
+import matplotlib.pyplot as plt
 
 from sklearn.linear_model import LinearRegression
 
@@ -10,6 +11,7 @@ from sklearn.linear_model import LinearRegression
 # For example, the phrase "you did not" would yield the length vector [3,3,3]
 # and then correlation cannot be calculated
 def calculate_len_baseline(tokens, importance):
+    pvalues = []
     spearman = []
     kendall = []
     mi_scores = []
@@ -19,7 +21,9 @@ def calculate_len_baseline(tokens, importance):
 
         if len(lengths) > 1:
             mi_scores.append(sklearn.metrics.mutual_info_score(lengths, importance[i]))
-            spearman.append(scipy.stats.spearmanr(lengths, importance[i])[0])
+            corr, pvalue = scipy.stats.spearmanr(lengths, importance[i])
+            spearman.append(corr)
+            pvalues.append(pvalue)
             kendall.append(scipy.stats.kendalltau(lengths, importance[i])[0])
 
     print("---------------")
@@ -32,10 +36,13 @@ def calculate_len_baseline(tokens, importance):
     print()
     spearman_mean = np.nanmean(np.asarray(spearman))
     spearman_std = np.nanstd(np.asarray(spearman))
-    return spearman_mean, spearman_std
+    pvalues_mean = np.nanmean(np.asarray(pvalues))
+    pvalues_std = np.nanmean(np.asarray(pvalues))
+    return spearman_mean, spearman_std, pvalues_mean, pvalues_std
 
 
 def calculate_freq_baseline(frequencies, importance):
+    pvalues = []
     spearman = []
     kendall = []
     mi_scores = []
@@ -43,7 +50,9 @@ def calculate_freq_baseline(frequencies, importance):
     for i in range(len(frequencies)):
         if len(frequencies[i])>0:
             mi_scores.append(sklearn.metrics.mutual_info_score(frequencies[i], importance[i]))
-            spearman.append(scipy.stats.spearmanr(frequencies[i], importance[i])[0])
+            corr, pvalue = scipy.stats.spearmanr(frequencies[i], importance[i])
+            spearman.append(corr)
+            pvalues.append(pvalue)
             kendall.append(scipy.stats.kendalltau(frequencies[i], importance[i])[0])
 
     spearman_mean = np.nanmean(np.asarray(spearman))
@@ -56,9 +65,12 @@ def calculate_freq_baseline(frequencies, importance):
     # print("Mutual Information: Mean: {:0.2f}, Stdev: {:0.2f}".format( np.nanmean(np.asarray(mi_scores)), np.nanstd(np.asarray(mi_scores))))
     print("---------------")
     print()
-    return spearman_mean, spearman_std
+    pvalues_mean = np.nanmean(np.asarray(pvalues))
+    pvalues_std = np.nanmean(np.asarray(pvalues))
+    return spearman_mean, spearman_std, pvalues_mean, pvalues_std
 
 def calculate_wordclass_baseline(wordclasses, importance):
+    pvalues = []
     ttest = []
     kendall = []
     mi_scores = []
@@ -83,7 +95,7 @@ def calculate_wordclass_baseline(wordclasses, importance):
     print()
     return ttest_mean, ttest_std
 
-def calculate_linear_regression(dependent, *independent):
+def calculate_linear_regression(dependent, *independent, plot=False, title=None):
     new_dependent = []
     new_independent = [[] for ind in independent]
     for idx, l in enumerate(dependent):
@@ -99,9 +111,19 @@ def calculate_linear_regression(dependent, *independent):
     y = np.array([item for sublist in dependent for item in sublist])
     reg = LinearRegression().fit(X, y)
     r_sq = reg.score(X, y)
+    if plot:
+        y_pred = reg.predict(X)
+        X, y = X.flatten(), y.flatten()
+        plt.scatter(X, y, color="black", s=3)
+        plt.plot(X, y_pred, color="blue", linewidth=1)
+        plt.xlabel("human")
+        plt.ylabel("model")
+        plt.title(title)
+        plt.savefig("plots/linear_regression-"+title+".png")
     return r_sq
 
 def calculate_permutation_baseline(human_importance, model_importance, num_permutations=100, seed=35):
+    pvalues = []
     all_random_correlations = []
     for i in range(len(human_importance)):
         if not len(human_importance[i]) == len(model_importance[i]):
@@ -113,8 +135,9 @@ def calculate_permutation_baseline(human_importance, model_importance, num_permu
                 random_correlations = []
                 for k in range(num_permutations):
                     shuffled_importance = random.sample(list(model_importance[i]), len(model_importance[i]))
-                    spearman = scipy.stats.spearmanr(shuffled_importance, human_importance[i])[0]
+                    spearman, pvalue = scipy.stats.spearmanr(shuffled_importance, human_importance[i])
                     random_correlations.append(spearman)
+                    pvalues.append(pvalue)
                 mean_sentence = np.nanmean(np.asarray(random_correlations))
                 all_random_correlations.append(mean_sentence)
 
@@ -124,4 +147,6 @@ def calculate_permutation_baseline(human_importance, model_importance, num_permu
     print("Permutation baseline: Mean: {:0.2f}, stdev: {:0.2f}".format(spearman_mean, spearman_std))
     print("---------------")
     print()
-    return spearman_mean, spearman_std
+    pvalues_mean = np.nanmean(np.asarray(pvalues))
+    pvalues_std = np.nanmean(np.asarray(pvalues))
+    return spearman_mean, spearman_std, pvalues_mean, pvalues_std
