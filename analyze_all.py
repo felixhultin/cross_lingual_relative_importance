@@ -3,7 +3,11 @@ import os.path
 import time
 import scipy.stats
 import sklearn.metrics
+
+
 from ast import literal_eval
+from sklearn.linear_model import LinearRegression
+
 from analysis.create_plots import *
 from analysis.calculate_baselines import calculate_freq_baseline, calculate_len_baseline, calculate_wordclass_baseline, calculate_permutation_baseline, calculate_linear_regression
 from extract_model_importance.tokenization_util import merge_symbols, merge_albert_tokens, merge_hyphens
@@ -23,7 +27,6 @@ def extract_human_importance(dataset):
             human_importance.append(fixation_duration)
 
     return tokens, human_importance
-
 
 # Importance type is either "saliency" or "attention"
 def extract_model_importance(dataset, model, importance_type):
@@ -54,18 +57,14 @@ def extract_model_importance(dataset, model, importance_type):
     return lm_tokens, lm_salience
 
 
-def compare_importance(
+def align_sentences(
     et_tokens, human_salience,
     lm_tokens, lm_salience,
-    importance_type,
-    normalize_by_length=False
+    importance_type, corpus, modelname,
+    log_tokenization_errors = False
 ):
     count_tok_errors = 0
-
-    pvalues = []
-    spearman_correlations = []
-    kendall_correlations = []
-    mutual_information = []
+    aligned_et_tokens, aligned_human_salience, aligned_lm_tokens, aligned_lm_salience = [],[],[],[]
     with open("results/correlations/" + corpus + "_" + modelname + "_" + importance_type + "_correlations.txt", "w") as outfile:
         outfile.write("Spearman\tKendall\tMutualInformation\n")
         for i, sentence in enumerate(et_tokens):
@@ -76,50 +75,21 @@ def compare_importance(
                     lm_tokens[i], lm_salience[i] = merge_hyphens(lm_tokens[i], lm_salience[i])
 
                 lm_tokens[i], lm_salience[i] = merge_symbols(lm_tokens[i], lm_salience[i])
-
-
             if len(et_tokens[i]) == len(lm_tokens[i]) == len(human_salience[i]) == len(lm_salience[i]):
-                if normalize_by_length:
-                    normalized_human_salience = []
-                    normalized_lm_salience = []
-                    for lt, ht, hs, ls in zip(lm_tokens, et_tokens, human_salience, lm_salience):
-                        hs = np.array([ s / len(t) for t, s in zip(ht, hs)])
-                        ls = np.array([ s / len(t) for t, s in zip(lt, ls)])
-                        normalized_human_salience.append(hs)
-                        normalized_lm_salience.append(ls)
-                    human_salience = normalized_human_salience
-                    lm_salience = normalized_lm_salience
-                # Calculate the correlation
-                corr, pvalue = scipy.stats.spearmanr(lm_salience[i], human_salience[i])
-                spearman_correlations.append(corr)
-                pvalues.append(pvalue)
-                kendall = scipy.stats.kendalltau(lm_salience[i], human_salience[i])[0]
-                kendall_correlations.append(kendall)
-                mi_score = sklearn.metrics.mutual_info_score(lm_salience[i], human_salience[i])
-                mutual_information.append(mi_score)
-                outfile.write("{:.2f}\t{:.2f}\t{:.2f}\n".format(corr, kendall, mi_score))
-
+                aligned_et_tokens.append(et_tokens[i])
+                aligned_human_salience.append(human_salience[i])
+                aligned_lm_tokens.append(lm_tokens[i])
+                aligned_lm_salience.append(lm_salience[i])
             else:
-                # Uncomment if you want to know more about the tokenization alignment problems
-                print("Tokenization Error:")
-                print(len(et_tokens[i]), len(lm_tokens[i]), len(human_salience[i]), len(lm_salience[i]))
-                print(et_tokens[i], lm_tokens[i])
-                print()
+                # Uncomment if you want to know more a bout the tokenization alignment problems
+                if log_tokenization_errors:
+                    print("Tokenization Error:")
+                    print(len(et_tokens[i]), len(lm_tokens[i]), len(human_salience[i]), len(lm_salience[i]))
+                    print(et_tokens[i], lm_tokens[i])
+                    print()
                 count_tok_errors += 1
+    return aligned_et_tokens, aligned_human_salience, aligned_lm_tokens, aligned_lm_salience
 
-
-    print(corpus, modelname)
-    print("Token alignment errors: ", count_tok_errors)
-    print("Spearman Correlation Model: Mean, Stdev")
-    mean_spearman = np.nanmean(np.asarray(spearman_correlations))
-    std_spearman = np.nanstd(np.asarray(spearman_correlations))
-    pvalues_mean = np.nanmean(np.asarray(pvalues))
-    pvalues_std = np.nanmean(np.asarray(pvalues))
-    print(mean_spearman, std_spearman)
-
-    print("\n\n\n")
-
-    return mean_spearman, std_spearman, pvalues_mean, pvalues_std
 
 
 parser = argparse.ArgumentParser()
@@ -127,223 +97,188 @@ parser.add_argument('--skip-model-if-not-exist', action='store_true')
 
 
 corpora_modelpaths = {
-    'geco': [
-        'albert-base-v2',
-        'bert-base-uncased',
-        'distilbert-base-uncased',
-        'bert-base-multilingual-cased'
-    ],
-    'geco_nl': [
-        'GroNLP/bert-base-dutch-cased',
-        'bert-base-multilingual-cased'
-    ],
-    'zuco': [
-        'bert-base-uncased',
-        'distilbert-base-uncased',
-        'albert-base-v2',
-        'bert-base-multilingual-cased'
-    ],
+    # 'geco': [
+    #     'albert-base-v2',
+    #     'bert-base-uncased',
+    #     'distilbert-base-uncased',
+    #     'bert-base-multilingual-cased'
+    # ],
+    # 'geco_nl': [
+    #     'GroNLP/bert-base-dutch-cased',
+    #     'bert-base-multilingual-cased'
+    #  ],
+    # 'zuco': [
+    #      'bert-base-uncased',
+    #      'distilbert-base-uncased',
+    #      'albert-base-v2',
+    #      'bert-base-multilingual-cased'
+    # ],
     'potsdam': [
         'dbmdz/bert-base-german-uncased',
         'distilbert-base-german-cased',
         'bert-base-multilingual-cased'
     ],
-    'russsent': ['DeepPavlov/rubert-base-cased', 'bert-base-multilingual-cased']
+    # 'russsent': ['DeepPavlov/rubert-base-cased', 'bert-base-multilingual-cased']
 }
 
-corpora_languages = {'geco': 'en',
-                     'geco_nl': 'nl',
-                     'zuco': 'en',
-                     'potsdam': 'de',
-                     'russsent': 'ru'}
 
-types = ["saliency", "attention", "flow"]
-baseline_columns = ('corpus', 'model', 'importance_type', 'length_mean_corr',
-                    'length_std_corr', 'freq_mean_corr', 'pos_mean_corr',
-                    'pos_std_corr')
-results_columns = ('importance_type', 'corpus', 'model', 'mean_corr',
-                   'std_corr', 'mean_corr_normd_by_length',
-                   'std_corr_normd_by_length')
-baseline_results = pd.DataFrame(columns=baseline_columns)
-regression_results = pd.DataFrame()
-results = pd.DataFrame(columns=results_columns)
-permutation_results = pd.DataFrame(
-    columns=('importance_type', 'corpus', 'model', 'mean_corr', 'std_corr'))
+def populate_dataframes():
+    corpora_languages = {'geco': 'en',
+                         'geco_nl': 'nl',
+                         'zuco': 'en',
+                         'potsdam': 'de',
+                         'russsent': 'ru'}
+    types = ["saliency", "attention", "flow"]
+    human_words_columns = (
+        'et_token', 'et_importance', 'frequency', 'length', 'sentence', 'corpus')
+    aligned_words_columns = (
+        'et_token', 'et_importance', 'lm_token', 'lm_importance', 'frequency',
+        'length', 'sentence', 'corpus', 'importance_type', 'model')
+    # Human only relative word importance
+    human_words_df = pd.DataFrame(columns=human_words_columns)
+    # Human and model aligned relative word importance
+    aligned_words_df = pd.DataFrame(columns=aligned_words_columns)
 
-for corpus, modelpaths in corpora_modelpaths.items():
-    print(corpus)
-    et_tokens, human_importance = extract_human_importance(corpus)
-    lang = corpora_languages[corpus]
-    # Human baselines
-    pos_tags, frequencies = process_tokens(et_tokens, lang)
-    lengths = [[len(token) for token in sent] for sent in et_tokens]
-    len_mean, len_std, len_pvalues_mean, len_pvalues_std = calculate_len_baseline(et_tokens, human_importance)
-    freq_mean, freq_std, freq_pvalues_mean, freq_pvalues_std = calculate_freq_baseline(frequencies, human_importance)
-    wc_mean, wc_std = calculate_wordclass_baseline(pos_tags, human_importance)
-    row = {
-        'corpus': corpus,
-        'model': 'human',
-        'importance_type': '-',
-        'length_mean_corr': len_mean,
-        'length_std_corr': len_std,
-        'freq_mean_corr': freq_mean,
-        'freq_std_corr': freq_std,
-        'pos_mean_corr': wc_mean,
-        'pos_std_corr': wc_std,
-    }
-    baseline_results = baseline_results.append(row, ignore_index=True)
+    # Populate dataframes
+    for corpus, modelpaths in corpora_modelpaths.items():
+        print(corpus)
+        et_tokens, human_importance = extract_human_importance(corpus)
+        lang = corpora_languages[corpus]
 
-    for importance_type in types:
-        print(importance_type)
-        for mp in modelpaths:
-            modelname = mp.split("/")[-1]
-            try:
-                lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
-            except FileNotFoundError:
-                skip = parser.parse_args().skip_model_if_not_exist
-                if skip:
-                    print("Skipping ", mp, " results file does not exist")
-                    continue
-                else:
-                    raise
+        pos_tags, frequencies = process_tokens(et_tokens, lang)
+        lengths = [[len(token) for token in sent] for sent in et_tokens]
 
-            # Model Correlation
-            spearman_mean, spearman_std, pvalues_mean, pvalues_std = compare_importance(et_tokens, human_importance, lm_tokens, lm_importance, importance_type)
-            # Normalized by length
-            spearman_mean_normd_by_length, spearman_std_normd_by_length, pvalues_mean_normed, pvalues_std_normed = compare_importance(et_tokens, human_importance, lm_tokens, lm_importance, importance_type, normalize_by_length=True)
-            results = results.append({
-                'importance_type': importance_type,
-                'corpus': corpus,
-                'model': modelname,
-                'mean_corr': spearman_mean,
-                'std_corr': spearman_std,
-                'pvalues_mean': pvalues_mean,
-                'pvalues_std': pvalues_std,
-                'mean_corr_normd_by_length': spearman_mean_normd_by_length,
-                'std_corr_normd_by_length': spearman_std_normd_by_length,
-                'pvalues_mean_normed': pvalues_mean_normed,
-                'pvalues_std_normed': pvalues_std_normed
-                },
-            ignore_index=True)
-
-            #Permutation Baseline
-            spearman_mean, spearman_std, pvalues_mean, pvalues_std = calculate_permutation_baseline(human_importance, lm_importance)
-            permutation_results = permutation_results.append(
-                {'importance_type': importance_type,
-                'corpus': corpus,
-                'model': mp,
-                'mean_corr': spearman_mean,
-                'std_corr': spearman_std,
-                'pvalues_mean': pvalues_mean,
-                'pvalues_std': pvalues_std
-                },
-            ignore_index=True)
-
-            # Plots
-            lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
-            # Plot length vs saliency
-            flat_et_tokens = flatten(et_tokens)
-            flat_lm_tokens = flatten(lm_tokens)
-            flat_human_importance = flatten_saliency(human_importance)
-            flat_lm_importance = flatten_saliency(lm_importance)
-            # visualize_lengths(flat_et_tokens, flat_human_importance, flat_lm_tokens, flat_lm_importance, "plots/" + corpus + "_" + model + "_length.png")
-
-            # Plot an example sentence
-            i = 10
-            visualize_sentence(i, et_tokens, human_importance, lm_importance, "plots/" + modelname + "_" + str(i) + ".png")
-
-            # Linguistic pre-processing (POS-tagging, word frequency extraction)
-            #lm_tokens and et_tokens differ slightly because there are some cases which cannot be perfectly aligned.
-            lm_pos_tags, lm_frequencies = process_tokens(lm_tokens, lang)
-
-            # Plot POS distribution with respect to saliency
-            tag2machineimportance = calculate_saliency_by_wordclass(lm_pos_tags, lm_importance)
-            visualize_posdistribution(tag2machineimportance, "plots/" + corpus + "_" + modelname + "_wordclasses.png")
-
-            # Plot POS distribution with respect to human importance
-            tag2humanimportance = calculate_saliency_by_wordclass(pos_tags, human_importance)
-            visualize_posdistribution(tag2humanimportance, "plots/" + corpus + "_human_wordclasses.png")
-
-            # Plot frequency vs saliency
-            flat_frequencies= flatten(frequencies)
-            flat_lm_frequencies = flatten(lm_frequencies)
-            visualize_frequencies(flat_frequencies, flat_human_importance, flat_lm_frequencies,
-                                      flat_lm_importance, "plots/" + corpus + "_" + modelname + "_frequency.png")
-
-            # LM baselines
-            len_mean, len_std, len_pvalues_mean, len_pvalues_std = calculate_len_baseline(lm_tokens, lm_importance)
-            freq_mean, freq_std, freq_pvalues_mean, freq_pvalues_std = calculate_freq_baseline(lm_frequencies, lm_importance)
-            wc_mean, wc_std = calculate_wordclass_baseline(lm_pos_tags, lm_importance)
-
-            row = {
-                'corpus': corpus,
-                'model': modelname,
-                'importance_type': importance_type,
-                'length_mean_corr': len_mean,
-                'length_std_corr': len_std,
-                'len_pvalues_mean': len_pvalues_mean,
-                'len_pvalues_std': len_pvalues_std,
-                'freq_mean_corr': freq_mean,
-                'freq_std_corr': freq_std,
-                'freq_pvalues_mean': freq_pvalues_mean,
-                'freq_pvalues_std': freq_pvalues_std,
-                'pos_mean_corr': wc_mean,
-                'pos_std_corr': wc_std
+        for idx, zipped in enumerate(zip(et_tokens, human_importance, frequencies, lengths)):
+            data = {
+                'et_token': zipped[0],
+                'et_importance': zipped[1],
+                'frequency': zipped[2],
+                'length': zipped[3]
             }
-            baseline_results = baseline_results.append(row, ignore_index=True)
+            sent_df = pd.DataFrame(data, columns=human_words_df.columns)
+            sent_df['sentence'], sent_df['corpus'] = idx, corpus
+            human_words_df = human_words_df.append(sent_df)
 
-            # Regression analysis
-            lm_lengths = [[len(token) for token in sent] for sent in lm_tokens]
-            row = {
-                'corpus': corpus,
-                'model': modelname,
-                'importance_type': importance_type,
-                'model~human+freq+length': calculate_linear_regression(lm_importance, human_importance, lm_frequencies, lm_lengths),
-                'model~human+freq': calculate_linear_regression(lm_importance, human_importance, lm_frequencies),
-                'model~human+length': calculate_linear_regression(lm_importance, human_importance, lm_lengths),
-                'model~freq+length': calculate_linear_regression(lm_importance, lm_frequencies, lm_lengths),
-                'model~freq': calculate_linear_regression(lm_importance, lm_frequencies),
-                'model~length': calculate_linear_regression(lm_importance, lm_lengths),
-                'model~human': calculate_linear_regression(lm_importance, human_importance, plot=True, title=corpus+"-"+modelname+"-"+importance_type),
+        for importance_type in types:
+            print(importance_type)
+            for mp in modelpaths:
+                modelname = mp.split("/")[-1]
+                try:
+                    lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
+                except FileNotFoundError:
+                    skip = parser.parse_args().skip_model_if_not_exist
+                    if skip:
+                        print("Skipping ", mp, " results file does not exist")
+                        continue
+                    else:
+                        raise
+                aligned = align_sentences(et_tokens, human_importance,
+                                          lm_tokens, lm_importance,
+                                          importance_type, corpus, modelname)
+                aligned_et_tokens, aligned_human_salience, aligned_lm_tokens, aligned_lm_salience = aligned
+                lm_lengths = [[len(token) for token in sent] for sent in aligned_lm_tokens]
+                _, lm_frequencies = process_tokens(aligned_lm_tokens, lang)
+                for idx, zipped in enumerate(zip(aligned[0], aligned[1], aligned[2], aligned[3], lm_frequencies, lm_lengths)):
+                    data = {
+                        'et_token': zipped[0],
+                        'et_importance': zipped[1],
+                        'lm_token': zipped[2],
+                        'lm_importance': zipped[3],
+                        'frequency': zipped[4],
+                        'length': zipped[5]
+                    }
+                    sent_df = pd.DataFrame(data, columns=aligned_words_df.columns)
+                    sent_df['sentence'], sent_df['corpus'], sent_df['importance_type'], sent_df['model'] = idx, corpus, importance_type, modelname
+                    aligned_words_df = aligned_words_df.append(sent_df)
+        # Force baseline values to be numeric
+        # TODO: Move this to when creating dataframes.
+        human_words_df['length'] = pd.to_numeric(human_words_df['length'])
+        human_words_df['frequency'] = pd.to_numeric(human_words_df['frequency'] )
+        aligned_words_df['length'] = pd.to_numeric(aligned_words_df['length'])
+        aligned_words_df['frequency'] = pd.to_numeric(aligned_words_df['frequency'])
 
-                'human~model+freq+length': calculate_linear_regression(human_importance, lm_importance, frequencies, lengths),
-                'human~model+freq': calculate_linear_regression(human_importance, lm_importance, frequencies),
-                'human~model+length': calculate_linear_regression(human_importance, lm_importance, lengths),
-                'human~freq+length': calculate_linear_regression(human_importance, frequencies, lengths),
-                'human~freq': calculate_linear_regression(human_importance, frequencies),
-                'human~length': calculate_linear_regression(human_importance, lengths),
-                'human~model': calculate_linear_regression(human_importance, lm_importance) # same as model~human?
+        return human_words_df, aligned_words_df
 
-            }
-            regression_results = regression_results.append(row, ignore_index=True)
+def calculate_correlation(
+    words_df: pd.DataFrame, X_column: str, y_column: str, groupby: list,
+    by_sentence: bool = True
+    ):
 
-    timestr = time.strftime("%Y-%m-%d-%H:%M:%S")
-    # Store results to excel
-    with pd.ExcelWriter("results/all_results-" + timestr + ".xlsx") as writer:
-        results.to_excel(writer, sheet_name='Model Importance')
-        permutation_results.to_excel(writer, sheet_name='Permutation Baselines')
-        baseline_results.to_excel(writer, sheet_name='Corpus statistical baselines')
-        regression_results.to_excel(writer, sheet_name='Regression analysis')
+    def spearmanr_pval(x,y):
+        return scipy.stats.spearmanr(x,y)[1]
 
-    # Store results to latex
-    with open("results/all_results-" + timestr + ".txt", "w") as outfile:
-        outfile.write("Model Importance: \n")
-        outfile.write(results.to_latex())
+    extra_sentence_column = ['sentence'] if by_sentence else []
+    grouped = words_df.groupby(groupby + extra_sentence_column)[[X_column, y_column]]
+    spearman = grouped.corr('spearman').iloc[0::2, -1]
+    pvalues = grouped.corr(method=spearmanr_pval).iloc[0::2, -1]
 
-        outfile.write("\n\nPermutation Baselines: \n")
-        outfile.write(permutation_results.to_latex())
+    spearman = spearman.groupby(groupby).agg(['mean', np.nanstd]).add_prefix('spearman_')
+    pvalues = pvalues.groupby(groupby).agg(['mean', np.nanstd]).add_prefix('pvalues_')
+    return spearman.join(pvalues)
 
-        outfile.write("\n\nLen-Freq Baselines: \n")
-        outfile.write(baseline_results.to_latex())
 
-        outfile.write("Regression analysis: \n")
-        outfile.write(regression_results.to_latex())
+def calculate_regression(
+    words_df: pd.DataFrame,
+    observations: list, outcomes: list,
+    groupby: list,
+    apply_log : bool = False,
+    ):
 
-        print(results)
-        print()
-        print(permutation_results)
-        print()
-        print(baseline_results)
-        print()
-        print(regression_results)
-        print()
+    def apply_linear_regression(df):
+        r_squares = {}
+        for obs in observations:
+            for out in outcomes:
+                # TODO: fix apply_log -> causes errors
+                if apply_log:
+                    df[obs + [out] ] = df[obs + [out] ].apply(np.log)
+                    df[obs + [out] ] = df[obs + [out] ].replace([np.inf, -np.inf], np.nan).dropna()
+                X, y = df[obs], df[out]
+                reg = LinearRegression().fit(X, y)
+                r_sq = reg.score(X, y)
+                column = "+".join(obs) + "->" + out
+                r_squares[column] = r_sq
+        return pd.Series(r_squares)
+
+    return words_df.groupby(groupby).apply(apply_linear_regression)
+
+""" Calculate correlations (Spearman)"""
+
+# Human vs. model
+human_words_df, aligned_words_df = populate_dataframes()
+human_vs_model = calculate_correlation(aligned_words_df, 'et_importance', 'lm_importance', groupby = ['importance_type', 'corpus', 'model'])
+
+# Human baselines
+human_vs_len = calculate_correlation(human_words_df, 'et_importance', 'length', groupby = ['corpus'])
+human_vs_freq = calculate_correlation(human_words_df, 'et_importance', 'frequency', groupby = ['corpus'])
+#human_vs_baselines = human_vs_len.join(human_vs_freq)
+
+# Model baselines
+model_vs_len = calculate_correlation(aligned_words_df, 'lm_importance', 'length', groupby = ['importance_type', 'corpus', 'model'])
+model_vs_freq = calculate_correlation(aligned_words_df, 'et_importance', 'frequency', groupby = ['importance_type', 'corpus', 'model'])
+#model_vs_baselines = model_vs_len.join(model_vs_freq)
+
+""" Calculate linear regression models"""
+
+# Regression
+observations = [
+    ['length'],
+    ['frequency'],
+    ['length', 'frequency'],
+]
+outcomes = ['et_importance']
+human_vs_regression = calculate_regression(human_words_df, observations, outcomes, ['corpus'])
+
+observations = [
+    ['length'],
+    ['frequency'],
+    ['lm_importance'],
+    ['length', 'frequency'],
+    ['length', 'lm_importance'],
+    ['frequency', 'lm_importance'],
+    ['length', 'frequency', 'lm_importance'],
+]
+outcomes = ['et_importance']
+model_vs_regression = calculate_regression(
+    aligned_words_df, observations, outcomes,
+    groupby = ['importance_type', 'corpus', 'model']
+)
