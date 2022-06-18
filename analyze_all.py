@@ -215,20 +215,31 @@ def calculate_regression(
         r_squares = {}
         for obs in observations:
             for out in outcomes:
-                # TODO: fix apply_log -> causes errors
+                filtered_df = df[ obs + [out] ]
+                column = "+".join(obs) + "~" + out
                 if apply_log:
-                    df[obs + [out] ] = df[obs + [out] ].apply(np.log)
-                    df[obs + [out] ] = df[obs + [out] ].replace([np.inf, -np.inf], np.nan).dropna()
-                X, y = df[obs], df[out]
+                    nof_entries = len(filtered_df)
+                    filtered_df = filtered_df\
+                        .apply(np.log)\
+                        .replace([np.inf, -np.inf], np.nan)\
+                        .dropna()
+                    nof_entries_dropped = nof_entries - len(filtered_df)
+                    if nof_entries_dropped:
+                        print(column, ":", nof_entries_dropped, "entries dropped from", nof_entries, "to", len(filtered_df))
+                X, y = filtered_df[obs], filtered_df[out]
                 reg = LinearRegression().fit(X, y)
                 r_sq = reg.score(X, y)
-                column = "+".join(obs) + "~" + out
                 r_squares[column] = r_sq
         return pd.Series(r_squares)
 
     return words_df.groupby(groupby).apply(apply_linear_regression)
 
-def calculate_results(human_words_df : pd.DataFrame, aligned_words_df: pd.DataFrame, by_sentence : bool = True):
+def calculate_results(
+    human_words_df : pd.DataFrame,
+    aligned_words_df: pd.DataFrame,
+    by_sentence : bool = True,
+    apply_log: bool = False
+):
     # Human vs. model (importance)
     human_vs_model = calculate_correlation(
         aligned_words_df,
@@ -274,7 +285,12 @@ def calculate_results(human_words_df : pd.DataFrame, aligned_words_df: pd.DataFr
         ['length', 'frequency'],
     ]
     outcomes = ['et_importance']
-    human_vs_regression = calculate_regression(human_words_df, observations, outcomes, ['corpus'])
+    human_vs_regression = calculate_regression(
+        human_words_df,
+        observations, outcomes,
+        ['corpus'],
+        apply_log = apply_log
+    )
 
     observations = [
         ['lm_importance'],
@@ -284,8 +300,10 @@ def calculate_results(human_words_df : pd.DataFrame, aligned_words_df: pd.DataFr
     ]
     outcomes = ['et_importance']
     model_vs_regression = calculate_regression(
-        aligned_words_df, observations, outcomes,
-        groupby = ['importance_type', 'corpus', 'model']
+        aligned_words_df,
+        observations, outcomes,
+        groupby = ['importance_type', 'corpus', 'model'],
+        apply_log = apply_log
     )
     results = {
         'human_vs_model': human_vs_model,
@@ -378,9 +396,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--skip-model-if-not-exist', action='store_true')
     parser.add_argument('--by-tokens', action='store_true', default=False)
+    parser.add_argument('--apply-log-to-regression', action='store_true', default=False)
+    apply_log = parser.parse_args().apply_log_to_regression
     by_sentence = False if parser.parse_args().by_tokens else True
     types = ["saliency", "attention", "attention_1st_layer", "flow"]
     check_result_files_exist(corpora_modelpaths, types)
     human_words_df, aligned_words_df = populate_dataframes(corpora_modelpaths, types)
-    results = calculate_results(human_words_df, aligned_words_df, by_sentence=by_sentence)
+    results = calculate_results(human_words_df, aligned_words_df, by_sentence=by_sentence, apply_log=apply_log)
     write_results_to_excel(results)
