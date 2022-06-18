@@ -7,10 +7,12 @@ import sklearn.metrics
 
 from ast import literal_eval
 from sklearn.linear_model import LinearRegression
+from tqdm.auto import tqdm
 
 from analysis.create_plots import *
 from analysis.calculate_baselines import calculate_freq_baseline, calculate_len_baseline, calculate_wordclass_baseline, calculate_permutation_baseline, calculate_linear_regression
 from extract_model_importance.tokenization_util import merge_symbols, merge_albert_tokens, merge_hyphens
+
 
 def extract_human_importance(dataset):
     with open("results/" + dataset + "_sentences.txt", "r") as f:
@@ -34,8 +36,11 @@ def extract_model_importance(dataset, model, importance_type):
     lm_salience = []
     fname = "results/" + dataset + "_" + model + "_" + importance_type + ".txt"
     if not os.path.isfile(fname):
-        error_message = fname + " does not exist. Have you run extract_all.py?"
-        raise FileNotFoundError(error_message)
+        if dataset == 'geco' and importance_type == 'flow' and model != 'bert-base-uncased':
+            print("Skipping ", fname)
+        else:
+            error_message = fname + " does not exist. Have you run extract_all.py?"
+            raise FileNotFoundError(error_message)
     with open(fname, "r") as f:
         for line in f.read().splitlines():
             tokens, heat = line.split("\t")
@@ -67,7 +72,7 @@ def align_sentences(
     aligned_et_tokens, aligned_human_salience, aligned_lm_tokens, aligned_lm_salience = [],[],[],[]
     with open("results/correlations/" + corpus + "_" + modelname + "_" + importance_type + "_correlations.txt", "w") as outfile:
         outfile.write("Spearman\tKendall\tMutualInformation\n")
-        for i, sentence in enumerate(et_tokens):
+        for i, sentence in tqdm(enumerate(et_tokens)):
             if len(et_tokens[i]) < len(lm_tokens[i]):
                 # TODO: some merge operations are already performed when extracting saliency. Would be better to have them all in one place.
                 if modelname.startswith("albert"):
@@ -90,45 +95,20 @@ def align_sentences(
                 count_tok_errors += 1
     return aligned_et_tokens, aligned_human_salience, aligned_lm_tokens, aligned_lm_salience
 
-
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--skip-model-if-not-exist', action='store_true')
-
-
-corpora_modelpaths = {
-    # 'geco': [
-    #     'albert-base-v2',
-    #     'bert-base-uncased',
-    #     'distilbert-base-uncased',
-    #     'bert-base-multilingual-cased'
-    # ],
-    # 'geco_nl': [
-    #     'GroNLP/bert-base-dutch-cased',
-    #     'bert-base-multilingual-cased'
-    #  ],
-    # 'zuco': [
-    #      'bert-base-uncased',
-    #      'distilbert-base-uncased',
-    #      'albert-base-v2',
-    #      'bert-base-multilingual-cased'
-    # ],
-    'potsdam': [
-        'dbmdz/bert-base-german-uncased',
-        'distilbert-base-german-cased',
-        'bert-base-multilingual-cased'
-    ],
-    # 'russsent': ['DeepPavlov/rubert-base-cased', 'bert-base-multilingual-cased']
-}
-
-
-def populate_dataframes():
+def populate_dataframes(corpora_modelpaths, types):
+    human_words_fn = 'results/words/' + 'human_words.csv'
+    aligned_words_fn = 'results/words/' + 'aligned_words.csv'
+    if os.path.isfile(human_words_fn) and os.path.isfile(aligned_words_fn):
+        print("Word-level files found.")
+        human_words_df = pd.read_csv(human_words_fn)
+        aligned_words_df = pd.read_csv(aligned_words_fn)
+        return human_words_df, aligned_words_df
+    print("Creating word-level files...")
     corpora_languages = {'geco': 'en',
                          'geco_nl': 'nl',
                          'zuco': 'en',
                          'potsdam': 'de',
                          'russsent': 'ru'}
-    types = ["saliency", "attention", "flow"]
     human_words_columns = (
         'et_token', 'et_importance', 'frequency', 'length', 'sentence', 'corpus')
     aligned_words_columns = (
@@ -163,6 +143,10 @@ def populate_dataframes():
             print(importance_type)
             for mp in modelpaths:
                 modelname = mp.split("/")[-1]
+                # unique_path = ['results', corpus, importance_type, modelname + '_words.csv']
+                # aligned_words_fn = "/".join(unique_path)
+                # if os.path.isfile(aligned_words_fn):
+                #     pass
                 try:
                     lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
                 except FileNotFoundError:
@@ -197,6 +181,9 @@ def populate_dataframes():
         aligned_words_df['length'] = pd.to_numeric(aligned_words_df['length'])
         aligned_words_df['frequency'] = pd.to_numeric(aligned_words_df['frequency'])
 
+        human_words_df.to_csv(human_words_fn)
+        aligned_words_df.to_csv(aligned_words_fn)
+
         return human_words_df, aligned_words_df
 
 def calculate_correlation(
@@ -212,8 +199,8 @@ def calculate_correlation(
     spearman = grouped.corr('spearman').iloc[0::2, -1]
     pvalues = grouped.corr(method=spearmanr_pval).iloc[0::2, -1]
 
-    spearman = spearman.groupby(groupby).agg(['mean', np.nanstd]).add_prefix('spearman_')
-    pvalues = pvalues.groupby(groupby).agg(['mean', np.nanstd]).add_prefix('pvalues_')
+    spearman = spearman.groupby(groupby).agg(['mean', np.nanstd]).add_prefix(y_column + '_spearman_')
+    pvalues = pvalues.groupby(groupby).agg(['mean', np.nanstd]).add_prefix(y_column + '_pvalues_')
     return spearman.join(pvalues)
 
 
@@ -241,44 +228,100 @@ def calculate_regression(
 
     return words_df.groupby(groupby).apply(apply_linear_regression)
 
-""" Calculate correlations (Spearman)"""
+def calculate_results(human_words_df : pd.DataFrame, aligned_words_df: pd.DataFrame):
+    # Human vs. model (importance)
+    human_vs_model = calculate_correlation(aligned_words_df, 'et_importance', 'lm_importance', groupby = ['importance_type', 'corpus', 'model'])
 
-# Human vs. model
-human_words_df, aligned_words_df = populate_dataframes()
-human_vs_model = calculate_correlation(aligned_words_df, 'et_importance', 'lm_importance', groupby = ['importance_type', 'corpus', 'model'])
+    # Human vs. baselines
+    human_vs_len = calculate_correlation(human_words_df, 'et_importance', 'length', groupby = ['corpus'])
+    human_vs_freq = calculate_correlation(human_words_df, 'et_importance', 'frequency', groupby = ['corpus'])
+    human_vs_baselines = human_vs_len.join(human_vs_freq)
 
-# Human baselines
-human_vs_len = calculate_correlation(human_words_df, 'et_importance', 'length', groupby = ['corpus'])
-human_vs_freq = calculate_correlation(human_words_df, 'et_importance', 'frequency', groupby = ['corpus'])
-#human_vs_baselines = human_vs_len.join(human_vs_freq)
+    # Model vs. baselines
+    model_vs_len = calculate_correlation(aligned_words_df, 'lm_importance', 'length', groupby = ['importance_type', 'corpus', 'model'])
+    model_vs_freq = calculate_correlation(aligned_words_df, 'et_importance', 'frequency', groupby = ['importance_type', 'corpus', 'model'])
+    model_vs_baselines = model_vs_len.join(model_vs_freq)
 
-# Model baselines
-model_vs_len = calculate_correlation(aligned_words_df, 'lm_importance', 'length', groupby = ['importance_type', 'corpus', 'model'])
-model_vs_freq = calculate_correlation(aligned_words_df, 'et_importance', 'frequency', groupby = ['importance_type', 'corpus', 'model'])
-#model_vs_baselines = model_vs_len.join(model_vs_freq)
+    # Regression
+    observations = [
+        ['length'],
+        ['frequency'],
+        ['length', 'frequency'],
+    ]
+    outcomes = ['et_importance']
+    human_vs_regression = calculate_regression(human_words_df, observations, outcomes, ['corpus'])
 
-""" Calculate linear regression models"""
+    observations = [
+        ['length'],
+        ['frequency'],
+        ['lm_importance'],
+        ['length', 'frequency'],
+        ['length', 'lm_importance'],
+        ['frequency', 'lm_importance'],
+        ['length', 'frequency', 'lm_importance'],
+    ]
+    outcomes = ['et_importance']
+    model_vs_regression = calculate_regression(
+        aligned_words_df, observations, outcomes,
+        groupby = ['importance_type', 'corpus', 'model']
+    )
+    results = {
+        'human_vs_model': human_vs_model,
+        'human_vs_baselines': human_vs_baselines,
+        'model_vs_baselines': model_vs_baselines,
+        'human_vs_regression': human_vs_regression,
+        'model_vs_regression': model_vs_regression,
+    }
 
-# Regression
-observations = [
-    ['length'],
-    ['frequency'],
-    ['length', 'frequency'],
-]
-outcomes = ['et_importance']
-human_vs_regression = calculate_regression(human_words_df, observations, outcomes, ['corpus'])
+    return results
 
-observations = [
-    ['length'],
-    ['frequency'],
-    ['lm_importance'],
-    ['length', 'frequency'],
-    ['length', 'lm_importance'],
-    ['frequency', 'lm_importance'],
-    ['length', 'frequency', 'lm_importance'],
-]
-outcomes = ['et_importance']
-model_vs_regression = calculate_regression(
-    aligned_words_df, observations, outcomes,
-    groupby = ['importance_type', 'corpus', 'model']
-)
+def check_result_files_exist(corpora_modelpaths, types):
+    for corpus, model_paths in corpora_modelpaths.items():
+        for mp in model_paths:
+            modelname = mp.split("/")[-1]
+            for type in types:
+                fname = "results/" + corpus + "_" + modelname + "_" + type + ".txt"
+                if not os.path.isfile(fname):
+                    # Skip 'flow' files which have not been computed
+                    if corpus == 'geco' and type == 'flow' and mp != 'bert-base-uncased':
+                        print("Skipping ", fname)
+                        continue
+                    error_message = fname + " does not exist. Have you run extract_all.py?"
+                    raise FileNotFoundError(error_message)
+
+
+
+if __name__ == '__main__':
+
+    corpora_modelpaths = {
+        'geco': [
+            'albert-base-v2',
+            'bert-base-uncased',
+            'distilbert-base-uncased',
+            'bert-base-multilingual-cased'
+        ],
+        'geco_nl': [
+            'GroNLP/bert-base-dutch-cased',
+            'bert-base-multilingual-cased'
+         ],
+        'zuco': [
+             'bert-base-uncased',
+             'distilbert-base-uncased',
+             'albert-base-v2',
+             'bert-base-multilingual-cased'
+        ],
+        'potsdam': [
+            'dbmdz/bert-base-german-uncased',
+            'distilbert-base-german-cased',
+            'bert-base-multilingual-cased'
+        ],
+        'russsent': ['DeepPavlov/rubert-base-cased', 'bert-base-multilingual-cased']
+    }
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--skip-model-if-not-exist', action='store_true')
+    #types = ["saliency", "attention", "attention_1st_layer", "flow"]
+    types = ["flow"]
+    check_result_files_exist(corpora_modelpaths, types)
+    human_words_df, aligned_words_df = populate_dataframes(corpora_modelpaths, types)
+    results = calculate_results(human_words_df, aligned_words_df)
