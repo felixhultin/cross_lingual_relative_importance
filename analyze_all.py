@@ -228,18 +228,43 @@ def calculate_regression(
 
     return words_df.groupby(groupby).apply(apply_linear_regression)
 
-def calculate_results(human_words_df : pd.DataFrame, aligned_words_df: pd.DataFrame):
+def calculate_results(human_words_df : pd.DataFrame, aligned_words_df: pd.DataFrame, by_sentence : bool = True):
     # Human vs. model (importance)
-    human_vs_model = calculate_correlation(aligned_words_df, 'et_importance', 'lm_importance', groupby = ['importance_type', 'corpus', 'model'])
+    human_vs_model = calculate_correlation(
+        aligned_words_df,
+        'et_importance', 'lm_importance',
+        groupby = ['importance_type', 'corpus', 'model'],
+        by_sentence = by_sentence
+    )
 
     # Human vs. baselines
-    human_vs_len = calculate_correlation(human_words_df, 'et_importance', 'length', groupby = ['corpus'])
-    human_vs_freq = calculate_correlation(human_words_df, 'et_importance', 'frequency', groupby = ['corpus'])
+    human_vs_len = calculate_correlation(
+        human_words_df,
+        'et_importance', 'length',
+        groupby = ['corpus'],
+        by_sentence = by_sentence
+    )
+    human_vs_freq = calculate_correlation(
+        human_words_df,
+        'et_importance', 'frequency',
+        groupby = ['corpus'],
+        by_sentence = by_sentence
+    )
     human_vs_baselines = human_vs_len.join(human_vs_freq)
 
     # Model vs. baselines
-    model_vs_len = calculate_correlation(aligned_words_df, 'lm_importance', 'length', groupby = ['importance_type', 'corpus', 'model'])
-    model_vs_freq = calculate_correlation(aligned_words_df, 'et_importance', 'frequency', groupby = ['importance_type', 'corpus', 'model'])
+    model_vs_len = calculate_correlation(
+        aligned_words_df,
+        'lm_importance', 'length',
+        groupby = ['importance_type', 'corpus', 'model'],
+        by_sentence = by_sentence
+    )
+    model_vs_freq = calculate_correlation(
+        aligned_words_df,
+        'et_importance', 'frequency',
+        groupby = ['importance_type', 'corpus', 'model'],
+        by_sentence = by_sentence
+    )
     model_vs_baselines = model_vs_len.join(model_vs_freq)
 
     # Regression
@@ -282,7 +307,7 @@ def write_results_to_excel(results):
         results['human_vs_model']\
             .reset_index()\
             .rename(columns = lambda c: c.replace('lm_importance_', ''))\
-            .to_excel(writer, sheet_name='Model Importance')
+            .to_excel(writer, sheet_name='Model Importance', index=False)
         # Write baselines to excel
         human_vs_baselines = results['human_vs_baselines'].reset_index()
         human_vs_baselines['importance_type'] = 'it'
@@ -293,7 +318,7 @@ def write_results_to_excel(results):
             .rename(columns =\
                 lambda c: c.replace('frequency_', '').replace('length_', '')
             )\
-            .to_excel(writer, sheet_name='Corpus statistical baselines')
+            .to_excel(writer, sheet_name='Corpus statistical baselines', index=False)
         # Write regression to excel
         human_vs_regression = results['human_vs_regression'].reset_index()
         model_vs_regression = results['model_vs_regression'].reset_index()
@@ -305,7 +330,7 @@ def write_results_to_excel(results):
                 .replace('lm_importance', 'model')\
                 .replace('et_importance', 'human')
             )\
-            .to_excel(writer, sheet_name='Regression analysis')
+            .to_excel(writer, sheet_name='Regression analysis', index=False)
 
 def check_result_files_exist(corpora_modelpaths, types):
     for corpus, model_paths in corpora_modelpaths.items():
@@ -326,34 +351,36 @@ def check_result_files_exist(corpora_modelpaths, types):
 if __name__ == '__main__':
 
     corpora_modelpaths = {
-        # 'geco': [
-        #     'albert-base-v2',
-        #     'bert-base-uncased',
-        #     'distilbert-base-uncased',
-        #     'bert-base-multilingual-cased'
-        # ],
-        # 'geco_nl': [
-        #     'GroNLP/bert-base-dutch-cased',
-        #     'bert-base-multilingual-cased'
-        #  ],
-        # 'zuco': [
-        #      'bert-base-uncased',
-        #      'distilbert-base-uncased',
-        #      'albert-base-v2',
-        #      'bert-base-multilingual-cased'
-        # ],
+        'geco': [
+            'albert-base-v2',
+            'bert-base-uncased',
+            'distilbert-base-uncased',
+            'bert-base-multilingual-cased'
+        ],
+        'geco_nl': [
+            'GroNLP/bert-base-dutch-cased',
+            'bert-base-multilingual-cased'
+         ],
+        'zuco': [
+             'bert-base-uncased',
+             'distilbert-base-uncased',
+             'albert-base-v2',
+             'bert-base-multilingual-cased'
+        ],
         'potsdam': [
             'dbmdz/bert-base-german-uncased',
             'distilbert-base-german-cased',
             'bert-base-multilingual-cased'
-        ]#,
-        #'russsent': ['DeepPavlov/rubert-base-cased', 'bert-base-multilingual-cased']
+        ],
+        'russsent': ['DeepPavlov/rubert-base-cased', 'bert-base-multilingual-cased']
     }
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--skip-model-if-not-exist', action='store_true')
+    parser.add_argument('--by-tokens', action='store_true', default=False)
+    by_sentence = False if parser.parse_args().by_tokens else True
     types = ["saliency", "attention", "attention_1st_layer", "flow"]
     check_result_files_exist(corpora_modelpaths, types)
     human_words_df, aligned_words_df = populate_dataframes(corpora_modelpaths, types)
-    results = calculate_results(human_words_df, aligned_words_df)
+    results = calculate_results(human_words_df, aligned_words_df, by_sentence=by_sentence)
     write_results_to_excel(results)
