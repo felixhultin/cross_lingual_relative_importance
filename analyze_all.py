@@ -213,22 +213,23 @@ def calculate_regression(
 
     def apply_linear_regression(df):
         r_squares = {}
+        if apply_log:
+            columns_to_log = set(list(itertools.chain(*observations)) + outcomes)
+            df = df[columns_to_log]
+            nof_entries = len(df)
+            df = df\
+                .apply(np.log)\
+                .replace([np.inf, -np.inf], np.nan)\
+                .dropna()
+            nof_entries_dropped = nof_entries - len(df)
+            if nof_entries_dropped:
+                print(nof_entries_dropped, "entries dropped from", nof_entries, "to", len(df))
         for obs in observations:
             for out in outcomes:
-                filtered_df = df[ obs + [out] ]
-                column = "+".join(obs) + "~" + out
-                if apply_log:
-                    nof_entries = len(filtered_df)
-                    filtered_df = filtered_df\
-                        .apply(np.log)\
-                        .replace([np.inf, -np.inf], np.nan)\
-                        .dropna()
-                    nof_entries_dropped = nof_entries - len(filtered_df)
-                    if nof_entries_dropped:
-                        print(column, ":", nof_entries_dropped, "entries dropped from", nof_entries, "to", len(filtered_df))
-                X, y = filtered_df[obs], filtered_df[out]
+                X, y = df[obs], df[out]
                 reg = LinearRegression().fit(X, y)
                 r_sq = reg.score(X, y)
+                column = "+".join(obs) + "~" + out
                 r_squares[column] = r_sq
         return pd.Series(r_squares)
 
