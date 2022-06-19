@@ -199,8 +199,8 @@ def calculate_correlation(
     spearman = grouped.corr('spearman').iloc[0::2, -1]
     pvalues = grouped.corr(method=spearmanr_pval).iloc[0::2, -1]
 
-    spearman = spearman.groupby(groupby).agg(['mean', np.nanstd]).add_prefix(y_column + '_spearman_')
-    pvalues = pvalues.groupby(groupby).agg(['mean', np.nanstd]).add_prefix(y_column + '_pvalues_')
+    spearman = spearman.groupby(groupby).agg(['mean', np.nanstd]).add_prefix(y_column + '_r_')
+    pvalues = pvalues.groupby(groupby).agg(['mean', np.nanstd]).add_prefix(y_column + '_p_')
     return spearman.join(pvalues)
 
 
@@ -229,7 +229,7 @@ def calculate_regression(
                 X, y = df[obs], df[out]
                 reg = LinearRegression().fit(X, y)
                 r_sq = reg.score(X, y)
-                column = "+".join(obs) + "~" + out
+                column = out + "~" + "+".join(obs)
                 r_squares[column] = r_sq
         return pd.Series(r_squares)
 
@@ -242,6 +242,7 @@ def calculate_results(
     apply_log: bool = False
 ):
     # Human vs. model (importance)
+    print("Calculate human vs. model correlations...")
     human_vs_model = calculate_correlation(
         aligned_words_df,
         'et_importance', 'lm_importance',
@@ -250,6 +251,7 @@ def calculate_results(
     )
 
     # Human vs. baselines
+    print("Calculate baselines correlations...")
     human_vs_len = calculate_correlation(
         human_words_df,
         'et_importance', 'length',
@@ -280,6 +282,7 @@ def calculate_results(
     model_vs_baselines = model_vs_len.join(model_vs_freq)
 
     # Regression
+    print("Calculate regression...")
     observations = [
         ['length'],
         ['frequency'],
@@ -329,13 +332,13 @@ def write_results_to_excel(results):
             .to_excel(writer, sheet_name='Model Importance', index=False)
         # Write baselines to excel
         human_vs_baselines = results['human_vs_baselines'].reset_index()
-        human_vs_baselines['importance_type'] = 'it'
-        human_vs_baselines['model'] = 'model'
+        human_vs_baselines['importance_type'] = '-'
+        human_vs_baselines['model'] = 'human'
         model_vs_baselines = results['model_vs_baselines'].reset_index()
         model_vs_baselines\
             .append(human_vs_baselines)\
-            .rename(columns =\
-                lambda c: c.replace('frequency_', '').replace('length_', '')
+            .rename(columns = lambda c: c\
+                .replace('frequency', 'freq')\
             )\
             .to_excel(writer, sheet_name='Corpus statistical baselines', index=False)
         # Write regression to excel
@@ -345,7 +348,6 @@ def write_results_to_excel(results):
             .merge(human_vs_regression, on = ['corpus'])\
             .rename(columns = lambda c: c\
                 .replace('frequency', 'freq')\
-                .replace('length', 'len')\
                 .replace('lm_importance', 'model')\
                 .replace('et_importance', 'human')
             )\
