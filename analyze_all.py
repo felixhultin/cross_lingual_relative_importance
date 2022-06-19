@@ -284,9 +284,9 @@ def calculate_results(
     # Regression
     print("Calculate regression...")
     observations = [
-        ['length'],
         ['frequency'],
-        ['length', 'frequency'],
+        ['length'],
+        ['frequency', 'length'],
     ]
     outcomes = ['et_importance']
     human_vs_regression = calculate_regression(
@@ -298,9 +298,9 @@ def calculate_results(
 
     observations = [
         ['lm_importance'],
-        ['lm_importance', 'length'],
         ['lm_importance', 'frequency'],
-        ['lm_importance', 'length', 'frequency'],
+        ['lm_importance', 'length'],
+        ['lm_importance', 'frequency', 'length'],
     ]
     outcomes = ['et_importance']
     model_vs_regression = calculate_regression(
@@ -323,7 +323,6 @@ def write_results_to_excel(results):
     """ Store results to excel file with timestamp. """
     timestr = time.strftime("%Y-%m-%d-%H:%M:%S")
     fname = "results/analysis/all_results-" + timestr + ".xlsx"
-    fname = "results/analysis/test.xlsx"
     with pd.ExcelWriter(fname) as writer:
         # Write human_vs_model to excel
         results['human_vs_model']\
@@ -373,9 +372,7 @@ if __name__ == '__main__':
 
     corpora_modelpaths = {
         'geco': [
-            'albert-base-v2',
             'bert-base-uncased',
-            'distilbert-base-uncased',
             'bert-base-multilingual-cased'
         ],
         'geco_nl': [
@@ -384,8 +381,6 @@ if __name__ == '__main__':
          ],
         'zuco': [
              'bert-base-uncased',
-             'distilbert-base-uncased',
-             'albert-base-v2',
              'bert-base-multilingual-cased'
         ],
         'potsdam': [
@@ -405,5 +400,7 @@ if __name__ == '__main__':
     types = ["saliency", "attention", "attention_1st_layer", "flow"]
     check_result_files_exist(corpora_modelpaths, types)
     human_words_df, aligned_words_df = populate_dataframes(corpora_modelpaths, types)
+    # We skip Albert and Distilbert in this study
+    aligned_words_df = aligned_words_df[~aligned_words_df['model'].str.contains('albert|distilbert')]
     results = calculate_results(human_words_df, aligned_words_df, by_sentence=by_sentence, apply_log=apply_log)
     write_results_to_excel(results)
