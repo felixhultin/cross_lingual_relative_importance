@@ -244,18 +244,18 @@ def shorten_model_name(mp):
 def shorten_importance_type(it):
     return {
         '-': '-',
-        'attention': 'Attn',
+        'attention': 'Attn (last)',
         'saliency': 'Saliency',
         'flow': 'Flow',
         'attention_1st_layer': 'Attn (1st)'}[it]
 
 def format_corpus_name(c):
     return {
-        'geco_nl': 'Geco (nl)',
-        'geco': 'Geco (en)',
-        'potsdam': 'Potsdam',
-        'russsent': 'Russsent',
-        'zuco':  'Zuco'
+        'geco_nl': 'Dutch',
+        'geco': 'English (Geco)',
+        'potsdam': 'German',
+        'russsent': 'Russian',
+        'zuco':  'English (ZuCo)'
     }[c]
 
 def format_df(df):
@@ -315,10 +315,10 @@ def plot_results_file(fn):
             pvalue_row = []
             for t in important_types:
                 t_df = m_df[m_df['importance_type'] == t]
-                values = t_df['mean_corr'].values
+                values = t_df['r_mean'].values
                 value = values[0] if len(values) > 0 else None
                 correlation_row.append(value)
-                values_p = t_df['pvalues_mean'].values
+                values_p = t_df['p_mean'].values
                 value_p = values_p[0] if len(values_p) > 0 else 0
                 pvalue_row.append(value_p)
             pvalues.append(pvalue_row)
@@ -329,8 +329,8 @@ def plot_baselines(fn):
     df = pd.read_excel(io=fn, sheet_name='Corpus statistical baselines', engine='openpyxl')
     df = format_df(df)
     c_df = df[df['importance_type'] != '-']
-    c_df = c_df.pivot_table(['length_mean_corr', 'freq_mean_corr'], ['corpus', 'model',], 'importance_type')
-    human_df = df[df['importance_type'] == '-'].pivot_table(['length_mean_corr', 'freq_mean_corr'], ['corpus', 'model'], 'importance_type')
+    c_df = c_df.pivot_table(['length_r_mean', 'freq_r_mean'], ['corpus', 'model',], 'importance_type')
+    human_df = df[df['importance_type'] == '-'].pivot_table(['length_r_mean', 'freq_r_mean'], ['corpus', 'model'], 'importance_type')
 
     c_df = c_df.round(decimals=2)
     human_df = human_df.round(decimals=2)
@@ -380,10 +380,81 @@ def make_regression_table(fn):
 
     return h_df, m_df
 
+def plot_correlation(df, ax, model : str, column: str, title: str):
+    model_type = 'monolingual' if model == 'Bert' else 'multilingual'
+    c_df = df
+    # Hack to deal with missing Flow value
+    if model_type == 'multilingual':
+        row = {'corpus': 'English (Geco)', 'model': 'mBert', 'importance_type': 'Flow', column: 0}
+        c_df = c_df.append(row, ignore_index=True)
+
+    c_df = c_df.sort_values(by='corpus')
+    labels = list(c_df.corpus.unique())
+
+    #human =  c_df[(c_df['model'] == 'Human') & (c_df['importance_type'] == '-')][column]
+    flow = c_df[(c_df['model'] == model) & (c_df['importance_type'] == 'Flow')][column]
+    attn_last = c_df[(c_df['model'] == model) & (c_df['importance_type'] == 'Attn (last)')][column]
+    attn_1st= c_df[(c_df['model'] == model) & (c_df['importance_type'] == 'Attn (1st)')][column]
+    saliency = c_df[(c_df['model'] == model) & (c_df['importance_type'] == 'Saliency')][column]
+    x = np.arange(len(labels))  # the label locations
+    width = 0.15  # the width of the bars
+    plt.rcParams["font.family"] = "Times New Roman"
+
+    rects1 = ax.bar(x - width * 2, flow, width, label='Flow')
+    rects2 = ax.bar(x - width, attn_1st, width, label='Attn (1st)')
+    rects3 = ax.bar(x, attn_last, width, label='Attn (last)')
+    rects4 = ax.bar(x + width, saliency, width, label='Saliency')
+
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    ax.set_ylabel('R')
+    ax.set_title(title)
+    ax.set_xticks(x, labels)
+    #ax.legend()
+
+    #if 'freq' not in column.lower():
+    #    plt.legend(loc='upper right')
+    #else:
+    #    ax.set_ylim([-1, 0])
+    #    plt.legend(loc='lower left', bbox_to_anchor=(-0.4, 0))
+
+    return ax
+    #
+    #plt.savefig('plots/correlations/' + column + '_' + model_type + '_barplot.jpg' )
+
 
 
 if __name__ == '__main__':
     filename = sys.argv[1]
-    plot_baselines(filename)
-    plot_results_file(filename)
-    h_df, m_df = make_regression_table(filename)
+
+    # Human vs. model
+    i_df = pd.read_excel(io=filename, sheet_name='Model Importance', engine='openpyxl')
+    i_df = i_df[~i_df['model'].str.contains('albert|distilbert')]
+
+    formatted_i_df = format_df(i_df)
+    fig, (ax1, ax2) = plt.subplots(2)
+    plot_correlation(formatted_i_df, ax1, 'Bert', 'r_mean', 'Monolingual')
+    plot_correlation(formatted_i_df, ax2, 'mBert', 'r_mean', 'Multilingual')
+    handles, labels = ax2.get_legend_handles_labels()
+    fig.legend(handles, labels, loc='center right')
+    fig.tight_layout()
+    fig.subplots_adjust(right=0.85)
+    fig.set_size_inches(9.0, 7.5)
+    fig.savefig('plots/correlations/importance_barplot.jpg')
+
+
+    # Baseline
+    # bl_df = pd.read_excel(io=filename, sheet_name='Corpus statistical baselines', engine='openpyxl')
+    # bl_df = bl_df[~bl_df['model'].str.contains('albert|distilbert')]
+    #
+    # formatted_bl_df = format_df(bl_df)
+    # plot_correlation(formatted_bl_df, 'Bert', 'length_r_mean', 'Correlation by length (monolingual)')
+    # plot_correlation(formatted_bl_df, 'Bert', 'freq_r_mean', 'Correlation by frequency (monolingual)')
+    # plot_correlation(formatted_bl_df, 'mBert', 'length_r_mean', 'Correlation by length (multilingual)')
+    # plot_correlation(formatted_bl_df, 'mBert', 'freq_r_mean', 'Correlation by frequency (multilingual)')
+
+    # Length
+
+
+    #plot_baselines(filename)
+    #plot_results_file(filename)
+    #h_df, m_df = make_regression_table(filename)
