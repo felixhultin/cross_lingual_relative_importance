@@ -391,45 +391,38 @@ def plot_correlation(df, ax, model : str, column: str, title: str):
     c_df = c_df.sort_values(by='corpus')
     labels = list(c_df.corpus.unique())
 
-    #human =  c_df[(c_df['model'] == 'Human') & (c_df['importance_type'] == '-')][column]
+
     flow = c_df[(c_df['model'] == model) & (c_df['importance_type'] == 'Flow')][column]
     attn_last = c_df[(c_df['model'] == model) & (c_df['importance_type'] == 'Attn (last)')][column]
     attn_1st= c_df[(c_df['model'] == model) & (c_df['importance_type'] == 'Attn (1st)')][column]
     saliency = c_df[(c_df['model'] == model) & (c_df['importance_type'] == 'Saliency')][column]
     x = np.arange(len(labels))  # the label locations
-    width = 0.15  # the width of the bars
-    plt.rcParams["font.family"] = "Times New Roman"
 
-    rects1 = ax.bar(x - width * 2, flow, width, label='Flow')
-    rects2 = ax.bar(x - width, attn_1st, width, label='Attn (1st)')
-    rects3 = ax.bar(x, attn_last, width, label='Attn (last)')
-    rects4 = ax.bar(x + width, saliency, width, label='Saliency')
+    width = 0.15  # the width of the bars
+    if 'length' in column.lower() or 'freq' in column.lower():
+        human = c_df[(c_df['model'] == 'Human') & (c_df['importance_type'] == '-')][column]
+        rects1 = ax.bar(x - width * 2.5, flow, width, label='Flow')
+        rects2 = ax.bar(x - width * 1.5, attn_1st, width, label='Attn (1st)')
+        rects3 = ax.bar(x - width * 0.5, attn_last, width, label='Attn (last)')
+        rects4 = ax.bar(x + width * 0.5, saliency, width, label='Saliency')
+        rects5 = ax.bar(x + width * 1.5, human, width, label='Human')
+    else:
+        rects1 = ax.bar(x - width * 2, flow, width, label='Flow')
+        rects2 = ax.bar(x - width, attn_1st, width, label='Attn (1st)')
+        rects3 = ax.bar(x, attn_last, width, label='Attn (last)')
+        rects4 = ax.bar(x + width, saliency, width, label='Saliency')
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
     ax.set_ylabel('R')
     ax.set_title(title)
     ax.set_xticks(x, labels)
-    #ax.legend()
-
-    #if 'freq' not in column.lower():
-    #    plt.legend(loc='upper right')
-    #else:
-    #    ax.set_ylim([-1, 0])
-    #    plt.legend(loc='lower left', bbox_to_anchor=(-0.4, 0))
 
     return ax
-    #
-    #plt.savefig('plots/correlations/' + column + '_' + model_type + '_barplot.jpg' )
 
-
-
-if __name__ == '__main__':
-    filename = sys.argv[1]
-
-    # Human vs. model
-    i_df = pd.read_excel(io=filename, sheet_name='Model Importance', engine='openpyxl')
+def plot_human_vs_model(fn):
+    i_df = pd.read_excel(io=fn, sheet_name='Model Importance', engine='openpyxl')
     i_df = i_df[~i_df['model'].str.contains('albert|distilbert')]
-
+    plt.rcParams["font.family"] = "Times New Roman"
     formatted_i_df = format_df(i_df)
     fig, (ax1, ax2) = plt.subplots(2)
     plot_correlation(formatted_i_df, ax1, 'Bert', 'r_mean', 'Monolingual')
@@ -441,20 +434,26 @@ if __name__ == '__main__':
     fig.set_size_inches(9.0, 7.5)
     fig.savefig('plots/correlations/importance_barplot.jpg')
 
+def plot_baselines_vs_importance(fn, model : str):
+    bl_df = pd.read_excel(io=fn, sheet_name='Corpus statistical baselines', engine='openpyxl')
+    bl_df = bl_df[~bl_df['model'].str.contains('albert|distilbert')]
+    fig, (ax1, ax2) = plt.subplots(2)
+    formatted_bl_df = format_df(bl_df)
+    plot_correlation(formatted_bl_df, ax1, model, 'length_r_mean', 'Length')
+    plot_correlation(formatted_bl_df, ax2, model, 'freq_r_mean', 'Frequency')
+    handles, labels = ax2.get_legend_handles_labels()
+    fig.legend(handles, labels, loc='center right')
+    fig.tight_layout()
+    fig.subplots_adjust(right=0.85)
+    fig.set_size_inches(9.0, 7.5)
+    fig.savefig('plots/correlations/baselines_barplot_{m}.jpg'.format(m=model))
 
-    # Baseline
-    # bl_df = pd.read_excel(io=filename, sheet_name='Corpus statistical baselines', engine='openpyxl')
-    # bl_df = bl_df[~bl_df['model'].str.contains('albert|distilbert')]
-    #
-    # formatted_bl_df = format_df(bl_df)
-    # plot_correlation(formatted_bl_df, 'Bert', 'length_r_mean', 'Correlation by length (monolingual)')
-    # plot_correlation(formatted_bl_df, 'Bert', 'freq_r_mean', 'Correlation by frequency (monolingual)')
-    # plot_correlation(formatted_bl_df, 'mBert', 'length_r_mean', 'Correlation by length (multilingual)')
-    # plot_correlation(formatted_bl_df, 'mBert', 'freq_r_mean', 'Correlation by frequency (multilingual)')
+if __name__ == '__main__':
+    filename = sys.argv[1]
 
-    # Length
+    # Human vs. model
+    plot_human_vs_model(filename)
 
-
-    #plot_baselines(filename)
-    #plot_results_file(filename)
-    #h_df, m_df = make_regression_table(filename)
+    # Baseline (mono- and multilingual models)
+    plot_baselines_vs_importance(filename, 'Bert')
+    plot_baselines_vs_importance(filename, 'mBert')
