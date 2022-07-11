@@ -1,9 +1,7 @@
-# Relative Importance in Sentence Processing
+# Cross-lingual Comparison of Human and Model Relative Word Importance
 
-This project contains code for the following paper: <br><br>
-Nora Hollenstein, Lisa Beinborn (2021): <br>
-[Relative Importance for Sentence Processing](https://arxiv.org/abs/2106.03471) <br>
-*to appear in the proceedings of ACL 2021* <br>
+This project contains code for the paper "Cross-lingual Comparison of Human and Model Relative Word
+Importance"
 
 
 ### 1. Re-run experiments
