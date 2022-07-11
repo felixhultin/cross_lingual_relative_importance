@@ -208,7 +208,7 @@ def calculate_regression(
     words_df: pd.DataFrame,
     observations: list, outcomes: list,
     groupby: list,
-    apply_log : bool = False,
+    apply_log : bool = False
     ):
 
     def apply_linear_regression(df):
@@ -224,6 +224,7 @@ def calculate_regression(
             nof_entries_dropped = nof_entries - len(df)
             if nof_entries_dropped:
                 print(nof_entries_dropped, "entries dropped from", nof_entries, "to", len(df))
+
         for obs in observations:
             for out in outcomes:
                 X, y = df[obs], df[out]
@@ -275,7 +276,7 @@ def calculate_results(
     )
     model_vs_freq = calculate_correlation(
         aligned_words_df,
-        'et_importance', 'frequency',
+        'lm_importance', 'frequency',
         groupby = ['importance_type', 'corpus', 'model'],
         by_sentence = by_sentence
     )
