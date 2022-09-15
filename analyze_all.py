@@ -150,7 +150,7 @@ def populate_dataframes(corpora_modelpaths, types):
                 try:
                     lm_tokens, lm_importance = extract_model_importance(corpus, modelname, importance_type)
                 except FileNotFoundError:
-                    skip = parser.parse_args().skip_model_if_not_exist
+                    skip = parser.parse_args().skip_if_not_exist
                     if skip or corpus == 'geco' and importance_type == 'flow' and modelname != 'bert-base-uncased':
                         print("Skipping ", modelname, " results file does not exist")
                         continue
@@ -393,7 +393,7 @@ if __name__ == '__main__':
     }
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--skip-model-if-not-exist', action='store_true')
+    parser.add_argument('--skip-if-not-exist', action='store_true')
     parser.add_argument('--by-tokens', action='store_true', default=False)
     parser.add_argument('--apply-log-to-regression', action='store_true', default=False)
     apply_log = parser.parse_args().apply_log_to_regression
