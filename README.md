@@ -6,10 +6,6 @@ Importance"
 
 ### 1 Running the experiments
 
-If all required data files are available (see section 2), simply run: `python analyze_all.py`
-
-
-
 If running `analyze_all.py` for the first time, the script will take a bit longer to create two `.csv`-files: `aligned_words.csv` and `human_words.csv`. These contain all word-level information needed to run the experiments, e.g. token, relative importance, word length and word frequency. These are saved in the `results/words` folder and can be used for additional analysis.
 
 Once `analyze_all.py` has finished, a final Excel file will be created: `all_results-<timestamp>.xlsx`. It contains all of the results organized into four tabs.
@@ -20,24 +16,21 @@ Once `analyze_all.py` has finished, a final Excel file will be created: `all_res
 - **Regression analysis**: Results of the linear regression analysis (out-of-date: look at section 6).  
 
 
-### 2. Pre-proccessing steps (optional)
+### 2. Pre-proccessing (optional)
 
+`analyze_all.py` (see section 1) require several intermediate result files to run. These can be found in the `results` folder and consist of files with the following formats `<corpus>_<hf_modelpath>_<importance type>.txt`, which align model relative importance to words in a corpus, `<corpus>_relfix_averages.txt`, which align words with human relative importance, and `<corpus>_sentences` which are simply the sentences in the corpus.
 
-`analyze_all.py` (see section 1) require several data files. The first are intermediate results files, which can be found in the `results` folder. These are files, which align model relative importance to words in a corpus: `<corpus>_<hf_modelpath>_<importance type>.txt`), human relative importance `<corpus>_relfix_averages.txt`. These are created by running (`extract_all.py`).
+These files are created by running `extract_all.py`, which use the files created by the data extractor scripts in the folder `extract_human_fixations`. See its specific [README](extract_human_fixations/README.md) for information on how to add a new corpus or re-run the scripts.
 
-### 3. Adding a corpus.
+### 3. Generating plots
 
-TODO
+Run `python analysis/create_plots.py <EXCEL_FILE>` on the Excel file (see section 1) to create the respective plots. The plots are saved in the `plots` folder.
 
-### 4. Generating plots
+### 4. Folder structure
 
-Run `python analysis/create_plots.py` on the Excel file (see section 1) to create the respective plots. 
+- **extract_human_fixations**: code to extract the relative fixation duration from the five eye-tracking corpora and average it over all subjects.
 
-### 5. Folder structure
-
-- **extract_human_fixations**: code to extract the relative fixation duration from two eye-tracking corpora and average it over all subjects. The two corpora are [GECO](https://expsy.ugent.be/downloads/geco/) and [ZUCO](https://osf.io/q3zws/).
-
-- **extract_model_importance**: code to extract saliency-based and attention-based importance from transformer-based language models.
+- **extract_model_importance**: code to extract saliency-based, attention-based importance from transformer-based language models.
 
 - **analysis**: code to compare and analyze patterns of importance in the human fixation durations and the model data. Also contains code to replicate the plots in the paper.
 
