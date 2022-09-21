@@ -27,12 +27,10 @@ Place the files in the task folders ("zuco1_SR", "zuco1_NR", "zuco2_NR") in data
 
 The Russian eye-tracking corpus Russian Sentence Corpus Stimulus (Russsent) can be downloaded on the following link: https://osf.io/x5q2r/
 
-
-
 ### Potsdam
 
 The German eye-tracking corpus Potsdam can be downloaded on the following http://read.psych.uni-potsdam.de/.
 
 ## Adding another corpus
 
-To add another corpus, a data_extractor_<corpus_name>.py script needs to be created which creates the relevant `relfix-feats.cvs` files. Also the corpus and relevant models need to be added to `extract_all.py` and `analyze_all.py`. 
+To add another corpus, a `data_extractor_<corpus_name>.py` script needs to be created which creates the relevant `relfix-feats.cvs` files. Also the corpus and relevant models need to be added to `extract_all.py` and `analyze_all.py`.
