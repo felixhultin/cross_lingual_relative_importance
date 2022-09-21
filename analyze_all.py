@@ -4,13 +4,11 @@ import time
 import scipy.stats
 import sklearn.metrics
 
-
 from ast import literal_eval
 from sklearn.linear_model import LinearRegression
 from tqdm.auto import tqdm
 
 from analysis.create_plots import *
-from analysis.calculate_baselines import calculate_freq_baseline, calculate_len_baseline, calculate_wordclass_baseline, calculate_permutation_baseline, calculate_linear_regression
 from extract_model_importance.tokenization_util import merge_symbols, merge_albert_tokens, merge_hyphens
 
 
@@ -30,7 +28,7 @@ def extract_human_importance(dataset):
 
     return tokens, human_importance
 
-# Importance type is either "saliency" or "attention"
+# importance_type is either "saliency", "attention", "attention_1st_layer" or "flow"
 def extract_model_importance(dataset, model, importance_type):
     lm_tokens = []
     lm_salience = []
@@ -352,6 +350,7 @@ def write_results_to_excel(results):
                 .replace('et_importance', 'human')
             )\
             .to_excel(writer, sheet_name='Regression analysis', index=False)
+        print("Written results to ", fname)
 
 def check_result_files_exist(corpora_modelpaths, types):
     for corpus, model_paths in corpora_modelpaths.items():
