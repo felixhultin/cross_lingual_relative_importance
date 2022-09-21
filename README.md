@@ -50,9 +50,6 @@ Note that later versions of transformers might lead to errors.
 To install, create and activate a virtual environment and run:  
 `pip3 install -r requirements.txt`
 
-For the more fine-grained analyses (POS-tags, word frequencies), you need to download the English spaCy model en_core_web_md to your virtual environment:  
-`python -m spacy download en_core_web_md`
-
 ### Acknowledgements
 
 A large part of the code base of https://github.com/beinborn/relative_importance has been re-purposed for this project.
