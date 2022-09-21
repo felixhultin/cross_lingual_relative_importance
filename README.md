@@ -24,7 +24,7 @@ These files are created by running `extract_all.py`, which use the files created
 
 ### 3. Generating plots
 
-Run `python analysis/create_plots.py <EXCEL_FILE>` on the Excel file (see section 1) to create the respective plots. The plots are saved in the `plots` folder.
+Run `python -m analysis.create_plots <EXCEL_FILE>` on the Excel file (see section 1) to create the respective plots. The plots are saved in the `plots` folder.
 
 ### 4. Folder structure
 
