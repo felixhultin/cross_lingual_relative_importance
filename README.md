@@ -56,4 +56,26 @@ Since LMMs are not readily available in Python, the results of the regression an
 
 ### Acknowledgements
 
-A large part of the code base of https://github.com/beinborn/relative_importance has been re-purposed for this project. Alexander Koplenig wrote the `mixed-effects/lmm.do` file. 
+A large part of the code base of https://github.com/beinborn/relative_importance has been re-purposed for this project. Alexander Koplenig wrote the `mixed-effects/lmm.do` file.
+
+### Paper and citation
+
+The paper can be found here: https://aclanthology.org/2022.clasp-1.2/. In BibTex, use the  citation below.
+
+```
+@inproceedings{morger-etal-2022-cross,
+    title = "A Cross-lingual Comparison of Human and Model Relative Word Importance",
+    author = "Morger, Felix  and
+      Brandl, Stephanie  and
+      Beinborn, Lisa  and
+      Hollenstein, Nora",
+    booktitle = "Proceedings of the 2022 CLASP Conference on (Dis)embodiment",
+    month = sep,
+    year = "2022",
+    address = "Gothenburg, Sweden",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2022.clasp-1.2",
+    pages = "11--23",
+    abstract = "Relative word importance is a key metric for natural language processing. In this work, we compare human and model relative word importance to investigate if pretrained neural language models focus on the same words as humans cross-lingually. We perform an extensive study using several importance metrics (gradient-based saliency and attention-based) in monolingual and multilingual models, including eye-tracking corpora from four languages (German, Dutch, English, and Russian). We find that gradient-based saliency, first-layer attention, and attention flow correlate strongly with human eye-tracking data across all four languages. We further analyze the role of word length and word frequency in determining relative importance and find that it strongly correlates with length and frequency, however, the mechanisms behind these non-linear relations remain elusive. We obtain a cross-lingual approximation of the similarity between human and computational language processing and insights into the usability of several importance metrics.",
+}
+```
