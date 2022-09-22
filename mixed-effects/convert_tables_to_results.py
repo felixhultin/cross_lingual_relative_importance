@@ -52,10 +52,3 @@ if __name__ == '__main__':
     with pd.ExcelWriter('conversion.xlsx') as writer:
         df_with_reffect.to_excel(writer, sheet_name='with_reffect', index=False)
         df_without_reffect.to_excel(writer, sheet_name='without_reffect', index=False)
-
-
-    # for idx, r in df.iterrows():
-    #
-    #
-    # for idx, row in table4[table4['LMM'] == 'LMMwithout_reffect'].iterrows():
-    #     df[df['corpus'] == row['corpus']][row['model']] = row['R2m']

@@ -13,7 +13,7 @@ https://stats.oarc.ucla.edu/other/mult-pkg/introduction-to-linear-mixed-models/
 
 
 *Get the data and pre-process
-import delimited felix/aligned_words.csv, encoding(UTF-8) clear 
+import delimited aligned_words.csv, encoding(UTF-8) clear 
 
 foreach var in et_importance length frequency lm_importance {
 	gen double log_`var' = log(`var')
@@ -24,7 +24,7 @@ keep importance model corpus log* et_token
 save aligned_words, replace
 
 
-import delimited felix/human_words.csv, encoding(UTF-8) clear 
+import delimited human_words.csv, encoding(UTF-8) clear 
 foreach var in et_importance length frequency  {
 	gen double log_`var' = log(`var')
 }
