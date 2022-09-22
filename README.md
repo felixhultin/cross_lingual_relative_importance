@@ -13,7 +13,7 @@ Once `analyze_all.py` has finished, a final Excel file will be created: `all_res
 - **Model Importance**: Correlation results (Spearman R) between human and model relative word importance.
 - **Permutation Baselines** Correlation results between model relative word importance and random numbers. Used as a sanity check, but not presented in paper.
 - **Corpus statistical baselines** Correlation results (Spearman R) between human and model relative word importance and the two corpus statistical baselines: Word frequency and word length.
-- **Regression analysis**: Results of the linear regression analysis (out-of-date: look at section 6).  
+- **Regression analysis**: Results of the linear regression analysis (out-of-date: look at section 5).  
 
 
 ### 2. Pre-proccessing (optional)
@@ -24,7 +24,7 @@ These files are created by running `extract_all.py`, which use the files created
 
 ### 3. Generating plots
 
-Run `python -m analysis.create_plots <EXCEL_FILE>` on the Excel file (see section 1) to create the respective plots. The plots are saved in the `plots` folder.
+Run `python -m analysis.create_plots all_results-<timestamp>.xlsx` on the Excel file (see section 1) to create the respective plots. The plots are saved in the `plots` folder.
 
 ### 4. Folder structure
 
@@ -50,6 +50,10 @@ Note that later versions of transformers might lead to errors.
 To install, create and activate a virtual environment and run:  
 `pip3 install -r requirements.txt`
 
+### 5. Regression analysis using Linear mixed models (LMM)
+
+Since LMMs are not readily available in Python, the results of the regression analysis in the paper was done in Stata. To run the script, run `stata mixed-effects/lmm.do`. If you want to create the plots, run `convert_tables_to_results.py`, which will create a `conversion.xlxs` Excel file. Move the `with_reffect` tab of the `conversion.xlsx` Excel file to the `Regression analysis` tab of the original `all_results-<timestamp>.xlsx` Excel file. Then you can run `python -m analysis.create_plots all_results-<timestamp>.xlsx`.
+
 ### Acknowledgements
 
-A large part of the code base of https://github.com/beinborn/relative_importance has been re-purposed for this project.
+A large part of the code base of https://github.com/beinborn/relative_importance has been re-purposed for this project. Alexander Koplenig wrote the `mixed-effects/lmm.do` file. 
